@@ -48,6 +48,7 @@ is_rotated = False
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
+Reference_volume = 10000
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
 #Minimum angle between two branches
@@ -101,7 +102,7 @@ plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thick
 filename_hull = output_tree_dir + sample_number + '_nodes'
 plac_nodes = dict.fromkeys(['nodes'])
 plac_nodes['nodes'] = plac_outline_nodes
-datapoints, xcentre, ycentre, zcentre = pg.equispaced_data_in_hull(n_seed, plac_nodes)
+datapoints, xcentre, ycentre, zcentre, volume = equispaced_data_in_hull(n_seed, plac_nodes)
 if debug_export_all:
     pg.export_ex_coords(datapoints, 'placenta', filename_hull, 'exnode')
     print('Node files for placental hull generated and exported to:', filename_hull)
@@ -128,8 +129,9 @@ datapoints_ellipse_array = np.hstack((index, datapoints_ellipse_array))
 plac_nodes = dict.fromkeys(['nodes'])
 plac_nodes['nodes'] = datapoints_ellipse_array
 
-ellipse_hull, xcentre, ycentre, zcentre = pg.equispaced_data_in_hull(n_seed,plac_nodes)
-
+ellipse_hull, xcentre, ycentre, zcentre, volume = equispaced_data_in_hull(n_seed,plac_nodes)
+n_seed_adjusted = int((volume*n_seed)/Reference_volume)
+ellipse_hull, xcentre, ycentre,zcentre, volume = equispaced_data_in_hull(n_seed_adjusted,plac_nodes)
 
 
 if debug_export_all:

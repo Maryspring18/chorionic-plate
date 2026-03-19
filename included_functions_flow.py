@@ -5,6 +5,7 @@ from skimage import filters, measure, color
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
 from scipy.ndimage import distance_transform_edt
+from scipy import spatial as sp
 from skimage.morphology import skeletonize  # Compute the skeleton of a binary image
 from skan import csr
 from skan import Skeleton, summarize
@@ -251,6 +252,61 @@ def check_in_ellipse(x, z, rx, a, rz):
     return in_ellipse
 
 
+def equispaced_data_in_hull(n, geom):
+    hull = sp.ConvexHull(geom['nodes'][:, 1:4])
+    # for i in range(0, len(hull.vertices)):
+    xmin = np.min(geom['nodes'][hull.vertices, 1])
+    xmax = np.max(geom['nodes'][hull.vertices, 1])
+    ymin = np.min(geom['nodes'][hull.vertices, 2])
+    ymax = np.max(geom['nodes'][hull.vertices, 2])
+    zmin = np.min(geom['nodes'][hull.vertices, 3])
+    zmax = np.max(geom['nodes'][hull.vertices, 3])
+    xcentre = (xmax - xmin) / 2
+    ycentre = (ymax - ymin) / 2
+    zcentre = (zmax - zmin) / 2
+
+    cuboid_vol = (xmax - xmin) * (ymax - ymin) * (zmax - zmin)  # cuboid volume
+    total_n = (cuboid_vol / hull.volume) * n
+    data_spacing = (cuboid_vol / total_n) ** (1.0 / 3.0)
+
+    nd_x = np.floor((xmax - xmin) / data_spacing)
+    nd_y = np.floor((ymax - ymin) / data_spacing)
+    nd_z = np.floor((zmax - zmin) / data_spacing)
+    nd_x = int(nd_x)
+    nd_y = int(nd_y)
+    nd_z = int(nd_z)
+
+    # Set up edge node coordinates
+    x_coord = np.linspace(xmin, xmax, nd_x)
+    y_coord = np.linspace(ymin, ymax, nd_y)
+    z_coord = np.linspace(zmin, zmax, nd_z)
+    # p = 1.5  # Adjust power: p > 1 → more points near zmin
+    # z_coord = zmin + (zmax - zmin) * (np.linspace(0, 1, nd_z) ** p)
+
+    # Use these vectors to form a unifromly spaced grid
+    data_coords = np.vstack(np.meshgrid(x_coord, y_coord, z_coord)).reshape(3, -1).T
+
+    # Store nodes that lie within hull
+    num_data = 0  # zero the total number of data points
+    datapoints = np.zeros((nd_x * nd_y * nd_z, 3))
+    hull2 = sp.Delaunay(geom['nodes'][hull.vertices, 1:4])
+    for i in range(len(data_coords)):  # Loop through grid
+        if hull2.find_simplex(data_coords[i]) > 0:
+            coord_check = True
+        else:
+            coord_check = False
+        if coord_check is True:  # Has to be strictly in the hull
+            datapoints[num_data, :] = data_coords[i, :]  # add to data array
+            num_data = num_data + 1
+    datapoints.resize(num_data, 3, refcheck=False)  # resize data array to correct size
+    # volume calculation
+    triangulation = sp.Delaunay(datapoints)
+    simplices = datapoints[triangulation.simplices]
+    volumes = np.abs(np.linalg.det(simplices[:, 1:] - simplices[:, 0, np.newaxis]) / 6)
+    total_vol = np.sum(volumes)
+    print('Data points within hull allocated. Total = ' + str(len(datapoints)))
+    print('Total volume  = ' + str(total_vol))
+    return datapoints, xcentre, ycentre, zcentre, total_vol
 def skeletonise_2d(img):
     # convert img to binary
     binary = img > 1.0e-6  # all non zeros
