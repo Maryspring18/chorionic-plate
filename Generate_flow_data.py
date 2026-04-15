@@ -20,8 +20,8 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23072'
-img_input_dir = 'Normal/'
+sample_number = 'JT23070'
+img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -48,7 +48,7 @@ is_rotated = False
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-Reference_volume = 10000
+Reference_volume = 427700
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
 #Minimum angle between two branches
@@ -132,6 +132,7 @@ plac_nodes['nodes'] = datapoints_ellipse_array
 ellipse_hull, xcentre, ycentre, zcentre, volume = equispaced_data_in_hull(n_seed,plac_nodes)
 n_seed_adjusted = int((volume*n_seed)/Reference_volume)
 ellipse_hull, xcentre, ycentre,zcentre, volume = equispaced_data_in_hull(n_seed_adjusted,plac_nodes)
+print('Adjusted seed points based on volume')
 
 
 if debug_export_all:
@@ -186,12 +187,30 @@ arterial_shaped_nodes = map_nodes_to_hull(nodes_scaled, hull_params, thickness, 
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
 trees = split_trees(arterial_shaped_nodes, art_elems, real_radii)
 
-chorion_branching_analytics(trees,sample_number,output_table_dir)
+if inlet_type == 'single':
+    trees = define_geom(arterial_shaped_nodes,art_elems,real_radii)
+elif inlet_type == 'double':
+    trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
+#arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,False)
+if inlet_type == 'single':
+    radius_inlet_branch = get_inlet_branch_radius(Geom_A)
+    Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
+    arterial_shaped_nodes = Geom_A['nodes']
+    arterial_elems = Geom_A['elems']
+    real_radii = Geom_A['radii']
+elif inlet_type=='double':
+    radius_inlet_branch = get_inlet_branch_radius(Geom_A)
+    Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
+    radius_inlet_branchB = get_inlet_branch_radius(Geom_B)
+    Geom_B = set_inlet_branch_radius(Geom_B,radius_inlet_branchB)
+    arterial_shaped_nodes,art_elems,real_radii = recombine_trees(Geom_A,Geom_B)
+    print('Trees recombined: ⸜(｡˃ ᵕ ˂ )⸝♡⸜(｡˃ ᵕ ˂ )⸝')
 
 outputfilename = output_tree_dir + 'Umb_' + sample_number
 if inlet_node:
-    nodes_Umb, elems_Umb = create_umb_anastomosis(arterial_shaped_nodes, art_elems, umbilical_length, outputfilename,
-                                                  debug_export_all, inlet_type)
+    nodes_Umb, elems_Umb, real_radii = create_umb_anastomosis(arterial_shaped_nodes, art_elems, umbilical_length, outputfilename,
+                                                  debug_export_all, inlet_type, real_radii)
     print('Anastomosis and inlet added: ٩(^ᗜ^)و')
 
 else:
@@ -206,6 +225,8 @@ pg.export_exfield_1d_linear(branch_structure, 'arteries', 'branch', output_tree_
 chorion_nodes, chorion_elems = add_stem_villi(nodes_Umb, elems_Umb, sv_length, terminal)
 pg.export_exelem_1d(chorion_elems, 'arteries', output_tree_dir + 'chorion')
 pg.export_ex_coords(chorion_nodes, 'arteries', output_tree_dir + 'chorion', 'exnode')
+parent_list_nodes, parent_list_elems = find_parent_list(chorion_nodes, chorion_elems)
+
 print('Chorion mapping complete: ৻(  •̀ ᗜ •́  ৻)')
 #######################################################################
 #----------------------- Tree Generation------------------------------#
@@ -223,7 +244,7 @@ chorion_and_stem_shaped['elem_down'] = elem_cnct_shaped['elem_down']
 #------------------- Tree Generation---------------------------#
 #Grow tree with hull
 full_geom_shaped = pg.grow_large_tree(angle_max_ft, angle_min_ft, fraction_ft, min_length_ft, point_limit_ft, volume,
-                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1)
+                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1, parent_list_elems)
 
 Tree_file = output_tree_dir + 'full_tree_' + sample_number
 

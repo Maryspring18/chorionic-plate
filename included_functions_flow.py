@@ -10,7 +10,6 @@ from skimage.morphology import skeletonize  # Compute the skeleton of a binary i
 from skan import csr
 from skan import Skeleton, summarize
 import networkx as nx
-from skan import draw
 import cv2
 import os
 
@@ -307,6 +306,7 @@ def equispaced_data_in_hull(n, geom):
     print('Data points within hull allocated. Total = ' + str(len(datapoints)))
     print('Total volume  = ' + str(total_vol))
     return datapoints, xcentre, ycentre, zcentre, total_vol
+
 def skeletonise_2d(img):
     # convert img to binary
     binary = img > 1.0e-6  # all non zeros
@@ -763,7 +763,6 @@ def add_stem_villi(nodes_all, elems_all, sv_length, terminals):
     mask_elems = np.any(chorion_elems != 0, axis=1)
     chorion_nodes = chorion_nodes[mask_nodes]
     chorion_elems = chorion_elems[mask_elems]
-
     return chorion_nodes, chorion_elems
 
 
@@ -775,24 +774,18 @@ def map_nodes_to_hull(nodes, params, thickness, outputfilename, debug_file):
         closest_slice_index = np.argmin(difference)
         slice_params = params[closest_slice_index, :]
         scale = 1
-
         z_closest_ellipse = z_level * np.sqrt(1 - (((nodes[i, 1] - slice_params[4]) / (slice_params[3] * scale)) ** 2))
-
         while (np.isnan(z_closest_ellipse)):
             scale += 0.01
             z_closest_ellipse = z_level * np.sqrt(
                 1 - (((nodes[i, 1] - slice_params[4]) / (slice_params[3] * scale)) ** 2))
-
-        # radius_check = (((nodes[i, 0] - slice_params[4]) / slice_params[3]) ** 2) + ((nodes[i, 3] / z_level) ** 2)
         if z_closest_ellipse < nodes[i, 3]:
             nodes[i, 3] = z_closest_ellipse
         else:
             nodes[i, 3] = z_level
-
     if debug_file:
         pg.export_ex_coords(nodes, 'arteries', outputfilename, 'exnode')
         print('Arterial nodes mapped to shaped hull exported to: ', outputfilename)
-
     return nodes
 
 
@@ -815,7 +808,7 @@ def find_root_nodes(nodes, elems):
     return np.asarray(root_nodes), np.asarray(node_upstream_end)
 
 
-def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, inlet_type):
+def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, inlet_type,radii):
     root_nodes, root_elems = find_root_nodes(nodes, elems)
     if len(root_nodes) == 2 and inlet_type == 'double':
         # calculate coordinates of midpoint for anastomosis
@@ -834,7 +827,13 @@ def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, in
         nodes_combined = np.vstack([new_node_2, new_node_1])
         nodes_new = np.vstack([nodes_combined, nodes])
 
-        # create edit and append elements to match newly created nodes
+
+        radii_root1 = radii[root_elems[0]]
+        radii_root2 = radii[root_elems[1]]
+        if radii_root1>radii_root2:
+            radii_new = np.hstack(([radii_root1,radii_root1,radii_root2,radii]))
+        else:
+            radii_new = np.hstack(([radii_root2, radii_root1, radii_root2, radii]))        # create edit and append elements to match newly created nodes
         elems[:, 0] += 3
         elems[:, 1] += 2
         elems[:, 2] += 2
@@ -864,12 +863,13 @@ def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, in
         anas2anas = anas2anas.reshape(1, 3)
         elems_new = np.vstack([anas2anas, elems])
         elems_new = elems_new.astype(int)
+        radii_new = np.hstack([radii[0],radii])
 
     pg.export_exelem_1d(elems_new, 'arteries', output_name)
     pg.export_ex_coords(nodes_new, 'arteries', output_name, 'exnode')
     print('Umbilical cord added. Nodes and elems mapped to shaped hull exported to: ', output_name)
 
-    return nodes_new, elems_new
+    return nodes_new, elems_new, radii_new
 
 def get_vessel_volume(nodes, radii, elems):
     node_1_coords = np.array([nodes[node_id] for node_id in elems[:, 1]])
@@ -989,75 +989,250 @@ def reindex_tree(nodes, elems, radii):
     return new_nodes, new_elems, new_radii
 
 
-def chorion_branching_analytics(trees,sample_number,export_directory):
-    # TREE A
-    arterial_geom_A = dict.fromkeys(['nodes', 'elems', 'radii', 'length', 'branch id'])
-    arterial_geom_A['nodes'] = trees['tree_A_nodes']
-    arterial_geom_A['elems'] = trees['tree_A_elems']
-    arterial_geom_A['radii'] = trees['tree_A_radii']
-    arterial_geom_A['length'] = pg.define_elem_lengths(trees['tree_A_nodes'][:, 1:4], trees['tree_A_elems'])
-
-    art_branch_data = pg.define_branch_from_geom(arterial_geom_A)
-    branch_id = assign_branchID(trees['tree_A_nodes'], trees['tree_A_elems'], art_branch_data)
-    arterial_geom_A['branch id'] = branch_id
-
-    branch_geom = {}
-    branch_geom['nodes'] = trees['tree_A_nodes']
-    branch_geom['elems'] = art_branch_data['elems']
-    branch_geom['euclidean length'] = pg.define_elem_lengths(trees['tree_A_nodes'][:, 1:4], art_branch_data['elems'])
-    arterial_geom_A, branch_geom_A, generation_table_A, strahler_table_A, branch_table_A = pg.analyse_branching(
-        arterial_geom_A,
-        branch_geom,
-        'strahler',
-        1., 1.)
-
-    tree_B_nodes_reindexed, tree_B_elems_reindexed, tree_B_radii_reindexed = reindex_tree(trees['tree_B_nodes'], trees['tree_B_elems'],
-                                                                                          trees['tree_B_radii'])
-
-    # TREE B
+def chorion_branching_analytics(trees,sample_number,export_directory, inlet_type, export_data):
     arterial_geom_B = dict.fromkeys(['nodes', 'elems', 'radii', 'length', 'branch id'])
-    arterial_geom_B['nodes'] = tree_B_nodes_reindexed
-    arterial_geom_B['elems'] = tree_B_elems_reindexed
-    arterial_geom_B['radii'] = tree_B_radii_reindexed
-    arterial_geom_B['length'] = pg.define_elem_lengths(tree_B_nodes_reindexed[:, 1:4], tree_B_elems_reindexed)
+    arterial_geom_A = dict.fromkeys(['nodes', 'elems', 'radii', 'length', 'branch id'])
 
-    art_branch_data_B = pg.define_branch_from_geom(arterial_geom_B)
-    branch_id_B = assign_branchID(tree_B_nodes_reindexed, tree_B_elems_reindexed, art_branch_data_B)
-    arterial_geom_B['branch id'] = branch_id_B
+    if inlet_type == 'double':
+        # TREE A
+        arterial_geom_A['nodes'] = trees['tree_A_nodes']
+        arterial_geom_A['elems'] = trees['tree_A_elems']
+        arterial_geom_A['radii'] = trees['tree_A_radii']
+        arterial_geom_A['length'] = pg.define_elem_lengths(trees['tree_A_nodes'][:, 1:4], trees['tree_A_elems'])
 
-    branch_geom_B = {}
-    branch_geom_B['nodes'] = tree_B_nodes_reindexed
-    branch_geom_B['elems'] = art_branch_data_B['elems']
-    branch_geom_B['euclidean length'] = pg.define_elem_lengths(tree_B_nodes_reindexed[:, 1:4], art_branch_data_B['elems'])
-    arterial_geom_B, branch_geom_B, generation_table_B, strahler_table_B, branch_table_B = pg.analyse_branching(
-        arterial_geom_B,
-        branch_geom_B,
-        'strahler',
-        1., 1.)
+        art_branch_data = pg.define_branch_from_geom(arterial_geom_A)
+        branch_id = assign_branchID(trees['tree_A_nodes'], trees['tree_A_elems'], art_branch_data)
+        arterial_geom_A['branch id'] = branch_id
 
-    # csv files
-    print('Writing files')
-    output = export_directory+sample_number+'_A_'+ 'StrahlerTable.csv'
-    headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
-    np.savetxt(output, strahler_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+        branch_geom = {}
+        branch_geom['nodes'] = trees['tree_A_nodes']
+        branch_geom['elems'] = art_branch_data['elems']
+        branch_geom['euclidean length'] = pg.define_elem_lengths(trees['tree_A_nodes'][:, 1:4], art_branch_data['elems'])
+        arterial_geom_A, branch_geom_A, generation_table_A, strahler_table_A, branch_table_A = pg.analyse_branching(
+            arterial_geom_A,
+            branch_geom,
+            'strahler',
+            1., 1.)
 
-    output = export_directory+sample_number+'_A_'+ 'GenerationTable.csv'
-    headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
-    np.savetxt(output, generation_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+        tree_B_nodes_reindexed, tree_B_elems_reindexed, tree_B_radii_reindexed = reindex_tree(trees['tree_B_nodes'], trees['tree_B_elems'],
+                                                                                              trees['tree_B_radii'])
 
-    output = export_directory +sample_number+'_A_'+ 'OverallTable.csv'
-    headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
-    np.savetxt(output, branch_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+        # TREE B
+        arterial_geom_B['nodes'] = tree_B_nodes_reindexed
+        arterial_geom_B['elems'] = tree_B_elems_reindexed
+        arterial_geom_B['radii'] = tree_B_radii_reindexed
+        arterial_geom_B['length'] = pg.define_elem_lengths(tree_B_nodes_reindexed[:, 1:4], tree_B_elems_reindexed)
 
-    output = export_directory +sample_number+'_B_'+ 'StrahlerTable.csv'
-    headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
-    np.savetxt(output, strahler_table_B, fmt='%.4f', delimiter=',', header=headerTable)
+        art_branch_data_B = pg.define_branch_from_geom(arterial_geom_B)
+        branch_id_B = assign_branchID(tree_B_nodes_reindexed, tree_B_elems_reindexed, art_branch_data_B)
+        arterial_geom_B['branch id'] = branch_id_B
 
-    output = export_directory +sample_number+'_B_'+ 'GenerationTable.csv'
-    headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
-    np.savetxt(output, generation_table_B, fmt='%.4f', delimiter=',', header=headerTable)
+        branch_geom_B = {}
+        branch_geom_B['nodes'] = tree_B_nodes_reindexed
+        branch_geom_B['elems'] = art_branch_data_B['elems']
+        branch_geom_B['euclidean length'] = pg.define_elem_lengths(tree_B_nodes_reindexed[:, 1:4], art_branch_data_B['elems'])
+        arterial_geom_B, branch_geom_B, generation_table_B, strahler_table_B, branch_table_B = pg.analyse_branching(
+            arterial_geom_B,
+            branch_geom_B,
+            'strahler',
+            1., 1.)
 
-    output = export_directory +sample_number+'_B_'+ 'OverallTable.csv'
-    headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
-    np.savetxt(output, branch_table_B, fmt='%.4f', delimiter=',', header=headerTable)
-    return
+        # csv files
+        if export_data:
+            print('Writing files')
+            output = export_directory+sample_number+'_A_'+ 'StrahlerTable.csv'
+            headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
+            np.savetxt(output, strahler_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+
+            output = export_directory+sample_number+'_A_'+ 'GenerationTable.csv'
+            headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
+            np.savetxt(output, generation_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+
+            output = export_directory +sample_number+'_A_'+ 'OverallTable.csv'
+            headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
+            np.savetxt(output, branch_table_A, fmt='%.4f', delimiter=',', header=headerTable)
+
+            output = export_directory +sample_number+'_B_'+ 'StrahlerTable.csv'
+            headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
+            np.savetxt(output, strahler_table_B, fmt='%.4f', delimiter=',', header=headerTable)
+
+            output = export_directory +sample_number+'_B_'+ 'GenerationTable.csv'
+            headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
+            np.savetxt(output, generation_table_B, fmt='%.4f', delimiter=',', header=headerTable)
+
+            output = export_directory +sample_number+'_B_'+ 'OverallTable.csv'
+            headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
+            np.savetxt(output, branch_table_B, fmt='%.4f', delimiter=',', header=headerTable)
+    elif inlet_type == 'single':
+        arterial_geom_A = dict.fromkeys(['nodes', 'elems', 'radii', 'length', 'branch id'])
+        arterial_geom_A['nodes'] = trees['tree_A_nodes']
+        arterial_geom_A['elems'] = trees['tree_A_elems']
+        arterial_geom_A['radii'] = trees['tree_A_radii']
+        arterial_geom_A['length'] = pg.define_elem_lengths(trees['tree_A_nodes'][:, 1:4], trees['tree_A_elems'])
+
+        art_branch_data = pg.define_branch_from_geom(arterial_geom_A)
+        branch_id = assign_branchID(trees['tree_A_nodes'], trees['tree_A_elems'], art_branch_data)
+        arterial_geom_A['branch id'] = branch_id
+    return arterial_geom_A, arterial_geom_B
+
+def assign_branchID(nodes, elems, branch_data):
+    branch_id = np.zeros(len(elems))
+    EC = pg.element_connectivity_1D(nodes[:,1:4],elems)
+    EC_down = EC['elem_down']
+    branch_start = branch_data['branch start']
+    branch_end = branch_data['branch end']
+    branch_number = 0
+    for i in range(0,len(branch_start)):
+        ne = branch_start[i]
+        branch_id[int(ne)] = i
+        while ne != branch_end[i]:
+            ne = EC_down[int(ne),1]
+            branch_id[int(ne)] = i
+
+    return branch_id
+
+def define_geom(nodes,elems,radii):
+    trees = {}
+    trees['tree_A_nodes'] = nodes
+    trees['tree_A_elems'] = elems
+    trees['tree_A_radii'] = radii
+    return trees
+
+def get_inlet_branch_radius(geom):
+    nodes = geom['nodes']
+    elems = geom['elems']
+    radii = geom['radii']
+    branch_id = geom['branch id']
+    inlet_node, inlet_elem = find_root_nodes(nodes,elems)
+    branch_number_inlet = branch_id[inlet_elem[0]]
+    inlet_branch_mask = branch_id==branch_number_inlet
+    inlet_branch_elems = elems[inlet_branch_mask]
+    inlet_branch_radii = radii[inlet_branch_mask]
+    radius  = np.max(inlet_branch_radii)
+    return radius
+
+def set_inlet_branch_radius(geom, radius):
+    nodes = geom['nodes']
+    elems = geom['elems']
+    radii = geom['radii']
+    branch_id = geom['branch id']
+    inlet_node, inlet_elem = find_root_nodes(nodes,elems)
+    branch_number_inlet = branch_id[inlet_elem[0]]
+    for i in range(0,len(elems)):
+        if branch_number_inlet == branch_id[i]:
+            radii[i] = radius
+    geom['radii'] = radii
+    return geom
+
+def recombine_trees(Geom_A,Geom_B):
+    """
+    Recombine two trees by offsetting IDs in tree_B to avoid conflicts.
+
+    Parameters:
+
+
+    Returns:
+    - combined_nodes: np.ndarray of shape (n_A + n_B, 4)
+    - combined_elems: np.ndarray of shape (m_A + m_B, 3)
+    - combined_radii: np.ndarray of shape (m_A + m_B, 1)
+    """
+    tree_A_nodes = Geom_A['nodes']
+    tree_A_elems = Geom_A['elems']
+    tree_A_radii = Geom_A['radii']
+    tree_B_nodes = Geom_B['nodes']
+    tree_B_elems = Geom_B['elems']
+    tree_B_radii = Geom_B['radii']
+    # Determine the maximum IDs in tree_A
+    max_node_id_A = int(np.max(tree_A_nodes[:, 0]))
+    max_elem_id_A = int(np.max(tree_A_elems[:, 0]))
+
+    # Offset for tree_B IDs
+    node_id_offset = max_node_id_A + 1
+    elem_id_offset = max_elem_id_A + 1
+
+    # Update node IDs in tree_B
+    tree_B_nodes_updated = tree_B_nodes.copy()
+    tree_B_nodes_updated[:, 0] += node_id_offset
+
+    # Create a mapping from old to new node IDs
+    old_to_new_node_ids = {
+        old_id: new_id for old_id, new_id in zip(
+            tree_B_nodes[:, 0], tree_B_nodes_updated[:, 0]
+        )
+    }
+
+    # Update element IDs and node references in tree_B
+    tree_B_elems_updated = tree_B_elems.copy()
+    tree_B_elems_updated[:, 0] += elem_id_offset
+    tree_B_elems_updated[:, 1] = np.array([
+        old_to_new_node_ids.get(node_id, node_id) for node_id in tree_B_elems[:, 1]
+    ])
+    tree_B_elems_updated[:, 2] = np.array([
+        old_to_new_node_ids.get(node_id, node_id) for node_id in tree_B_elems[:, 2]
+    ])
+
+    # Concatenate nodes, elements, and radii
+    combined_nodes = np.concatenate((tree_A_nodes, tree_B_nodes_updated), axis=0)
+    combined_elems = np.concatenate((tree_A_elems, tree_B_elems_updated), axis=0)
+    combined_radii = np.concatenate((tree_A_radii, tree_B_radii), axis=0)
+
+    return combined_nodes, combined_elems, combined_radii
+
+
+def find_parent_list(nodes, elems):
+    node_downstream_end = []
+    parent_nodes = []
+    elem_cncty = element_connectivity_multi(nodes[:, 1:4], elems)
+    elem_up = elem_cncty['elem_up']
+    elem_down = elem_cncty['elem_down']
+    for i in range(0, len(elem_down)):
+        if (elem_down[i, 0] == 0):
+            node_downstream_end.append(i)
+    for elements in node_downstream_end:
+        node_number = elems[elements, 1]
+        parent_nodes.append(nodes[node_number, :])
+    return np.asarray(parent_nodes), np.asarray(node_downstream_end)
+
+def element_connectivity_multi(node_loc, elems):
+    # Initialise connectivity arrays
+    anastomosis = False
+    num_elems = len(elems)
+    num_nodes = len(node_loc)
+    elems_at_node = np.zeros((num_nodes, 20), dtype=int) #allow up to 20-furcations
+    # determine elements that are associated with each node
+    for ne in range(0, num_elems):
+        for nn in range(1, 3):
+            nnod = elems[ne][nn]
+            elems_at_node[nnod][0] = elems_at_node[nnod][0] + 1
+            elems_at_node[nnod][elems_at_node[nnod][0]] = ne
+    elem_upstream = np.zeros((num_elems, int(np.max(elems_at_node[:,0]))), dtype=int)
+    elem_downstream = np.zeros((num_elems, int(np.max(elems_at_node[:,0]))), dtype=int)
+    # assign connectivity
+    for ne in range (0,num_elems):
+        upstream_node = elems[ne][1]
+        downstream_node = elems[ne][2]
+        nnod2 = elems[ne][2]  # second node in elem
+        if elems_at_node[nnod2][0] == 3:
+            elem1 = elems_at_node[nnod2][1]
+            elem2 = elems_at_node[nnod2][2]
+            elem3 = elems_at_node[nnod2][3]
+            if (elems[elem1, 2] == elems[elem2, 2]) or (elems[elem2, 2] == elems[elem3, 2]) or (
+                    elems[elem1, 2] == elems[elem3, 2]):
+                anastomosis = True
+        for noelem in range(1, elems_at_node[nnod2][0] + 1):
+            ne2 = elems_at_node[nnod2][noelem]
+
+            if ne2 != ne:
+                if not anastomosis:
+                    elem_upstream[ne2][0] = elem_upstream[ne2][0] + 1
+                    elem_upstream[ne2][elem_upstream[ne2][0]] = ne
+                    elem_downstream[ne][0] = elem_downstream[ne][0] + 1
+                    elem_downstream[ne][elem_downstream[ne][0]] = ne2
+                elif anastomosis:
+                    anastomosis = False
+                    if elems[ne][2] != elems[ne2][2]:
+                        elem_upstream[ne2][0] = elem_upstream[ne2][0] + 1
+                        elem_upstream[ne2][elem_upstream[ne2][0]] = ne
+                        elem_downstream[ne][0] = elem_downstream[ne][0] + 1
+                        elem_downstream[ne][elem_downstream[ne][0]] = ne2
+    return {'elem_up': elem_upstream, 'elem_down': elem_downstream}
