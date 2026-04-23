@@ -104,22 +104,10 @@ def read_png(filename, extract_colour):
     return img2
 
 
-def generate_placenta_outline(image, pixel_spacing, thickness, outputfilename, debug_img, debug_file, is_rotate,
-                              rotation_angle):
-    if is_rotate:
-        (h, w) = image.shape[:2]
-        center = (w // 2, h // 2)
+def generate_placenta_outline(image, pixel_spacing, thickness, outputfilename, debug_img, debug_file,
+                              ):
 
-        # Define rotation matrix (120 degrees clockwise)
-        angle = rotation_angle  # Clockwise rotation
-        rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-
-        # Rotate the image
-        rotated_image = cv2.warpAffine(image, rotation_matrix, (w, h))
-
-        edges = filters.sobel(rotated_image)
-    else:
-        edges = filters.sobel(image)
+    edges = filters.sobel(image)
     binary_edges = edges > filters.threshold_otsu(edges)
     contours = measure.find_contours(binary_edges, level=0.8)
 
@@ -727,24 +715,26 @@ def allocate_stem_locations(branch_data, branch_structure, terminals):
     return np.asarray(stem_location_elems)
 
 
-def add_stem_villi(nodes_all, elems_all, sv_length, terminals):
+def add_stem_villi(nodes_all, elems_all, sv_length, terminals, radii):
     branch_structure, branch_data = allocate_branch_numbers(nodes_all, elems_all)
     stem_location = allocate_stem_locations(branch_data, branch_structure, terminals)
-
     print("Number of stem villi added:", len(stem_location))
     node_len = len(nodes_all)
     elem_len = len(elems_all)
     new_node_len = node_len + len(stem_location)
     new_elem_len = elem_len + len(stem_location)
-
     # initialise new arrays
     chorion_elems = np.zeros((new_elem_len, 3), dtype=int)
     chorion_nodes = np.zeros((new_node_len, 4))
+    chorion_radii = np.zeros(new_elem_len)
+
     node_count = node_len
     elem_count = elem_len
     chorion_nodes[0:node_len, :] = nodes_all
     chorion_elems[0:elem_len, :] = elems_all
+    chorion_radii[0:elem_len] = radii
     bif_elems, bif_nodes, branch_parents, branch_end = find_branch_points(nodes_all, elems_all)
+    stem_location = stem_location[stem_location != None]
     stem_location = np.unique(stem_location)
     for branch_elem in stem_location:
         connected_node_num = elems_all[branch_elem, 2]
@@ -757,15 +747,42 @@ def add_stem_villi(nodes_all, elems_all, sv_length, terminals):
             chorion_elems[elem_count][0] = elem_count
             chorion_elems[elem_count][1] = connected_node_num
             chorion_elems[elem_count][2] = node_count
+            chorion_radii[elem_count] = radii[branch_elem]
             elem_count += 1
             node_count += 1
     mask_nodes = np.any(chorion_nodes != 0, axis=1)
     mask_elems = np.any(chorion_elems != 0, axis=1)
+
     chorion_nodes = chorion_nodes[mask_nodes]
     chorion_elems = chorion_elems[mask_elems]
-    return chorion_nodes, chorion_elems
+    chorion_radii = chorion_radii[mask_elems]
+    return chorion_nodes, chorion_elems, chorion_radii
 
-
+def adjust_terminal_branch_radii(nodes, elems, radii, terminals):
+    bif_elems, bif_nodes, branch_parents, branch_end = find_branch_points(nodes, elems)
+    terminal_elems = terminals['terminal_elems']
+    terminal_branches = []
+    elem_cnct = pg.element_connectivity_1D(nodes[:, 1:4], elems)
+    elem_up = elem_cnct['elem_up']
+    for elem_terminal in terminal_elems:
+        count = 0
+        parent_found = False
+        radii_sum = 0
+        elem = elem_terminal
+        while count <150 and not parent_found:
+            radii_sum += radii[elem]
+            elem = elem_up[elem][1]
+            if elem in branch_parents:
+                parent_found = True
+            count += 1
+        mean_radii = radii_sum/count
+        new_count = 0
+        elem = elem_terminal
+        while new_count != count:
+            radii[elem] = mean_radii
+            elem = elem_up[elem][1]
+            new_count += 1
+    return radii
 def map_nodes_to_hull(nodes, params, thickness, outputfilename, debug_file):
     z_level = (thickness / 2.0)
     slice_coordinates = params[:, 0]
@@ -812,40 +829,57 @@ def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, in
     root_nodes, root_elems = find_root_nodes(nodes, elems)
     if len(root_nodes) == 2 and inlet_type == 'double':
         # calculate coordinates of midpoint for anastomosis
-        x_point = (root_nodes[0, 1] + root_nodes[1, 1]) / 2
-        y_point = (root_nodes[0, 2] + root_nodes[1, 2]) / 2
-        z_midpoint = (root_nodes[0, 3] + root_nodes[1, 3]) / 2.0
-        z_point = z_midpoint + umb_length
+        x_point_1 = root_nodes[0, 1]
+        x_point_2 = root_nodes[1, 1]
+        y_point_1 = root_nodes[0, 2]
+        y_point_2 =  root_nodes[1, 2]
+
+        z_midpoint_1 = root_nodes[0, 3] + (umb_length / 2.0)
+        z_point_1 = z_midpoint_1 + umb_length
+        z_midpoint_2 = root_nodes[1, 3] + (umb_length / 2.0)
+        z_point_2 = z_midpoint_2 + umb_length
+        radii_root1 = radii[root_elems[0]]
+        radii_root2 = radii[root_elems[1]]
+        radii_anast  = (radii_root1 + radii_root2)/2
         node_index = len(nodes)
 
         # create and append new nodes to end of node file
-        new_node_1 = np.asarray([1, x_point, y_point, z_point])
-        new_node_2 = np.asarray([0, x_point, y_point, (z_point + umb_length)])
+        new_node_1 = np.asarray([0, x_point_1, y_point_1, z_point_1])
+        new_node_1_mid = np.asarray([1, x_point_1, y_point_1, z_midpoint_1])
+        new_node_2 = np.asarray([2, x_point_2, y_point_2, z_point_2])
+        new_node_2_mid = np.asarray([3, x_point_2, y_point_2, z_midpoint_2])
         new_node_1 = new_node_1.reshape(1, 4)
         new_node_2 = new_node_2.reshape(1, 4)
-        nodes[:, 0] = nodes[:, 0].astype(int) + int(2)
-        nodes_combined = np.vstack([new_node_2, new_node_1])
+        new_node_1_mid = new_node_1_mid.reshape(1, 4)
+        new_node_2_mid = new_node_2_mid.reshape(1, 4)
+
+        nodes[:, 0] = nodes[:, 0].astype(int) + int(4)
+        nodes_combined = np.vstack([new_node_1, new_node_1_mid,new_node_2,new_node_2_mid])
         nodes_new = np.vstack([nodes_combined, nodes])
 
 
-        radii_root1 = radii[root_elems[0]]
-        radii_root2 = radii[root_elems[1]]
-        if radii_root1>radii_root2:
-            radii_new = np.hstack(([radii_root1,radii_root1,radii_root2,radii]))
-        else:
-            radii_new = np.hstack(([radii_root2, radii_root1, radii_root2, radii]))        # create edit and append elements to match newly created nodes
-        elems[:, 0] += 3
-        elems[:, 1] += 2
-        elems[:, 2] += 2
-        root2anas_1 = np.asarray([1, 1, elems[root_elems[0], 1]])
-        root2anas_2 = np.asarray([2, 1, elems[root_elems[1], 1]])
-        anas2anas = np.asarray([0, 0, 1])
-        root2anas_1 = root2anas_1.reshape(1, 3)
-        root2anas_2 = root2anas_2.reshape(1, 3)
-        anas2anas = anas2anas.reshape(1, 3)
-        elems_new = np.vstack([anas2anas, root2anas_1, root2anas_2, elems])
+
+    # create edit and append elements to match newly created nodes
+        elems[:, 0] += 5
+        elems[:, 1] += 4
+        elems[:, 2] += 4
+        in1_anast = np.asarray([0,0,1])
+        anast_root1 = np.asarray([1,1,elems[root_elems[0], 1]])
+        in2_anast = np.asarray([2,2,3])
+        anast_root2 = np.asarray([3,3,elems[root_elems[1], 1]])
+        anast = np.asarray([4,1,3])
+
+
+        in1_anast = in1_anast.reshape(1, 3)
+        anast_root1 = anast_root1.reshape(1, 3)
+        in2_anast = in2_anast.reshape(1, 3)
+        anast_root2 = anast_root2.reshape(1, 3)
+        anast = anast.reshape(1, 3)
+        elems_new = np.vstack([in1_anast,anast_root1, in2_anast, anast_root2,anast, elems])
         elems_new = elems_new.astype(int)
 
+        new_radii = np.array([radii_root1,radii_root1,radii_root2,radii_root2,radii_anast])
+        radii_new = np.concatenate((new_radii,radii))
 
     elif inlet_type == 'single':
         x_point = root_nodes[0, 1]
@@ -867,6 +901,8 @@ def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, in
 
     pg.export_exelem_1d(elems_new, 'arteries', output_name)
     pg.export_ex_coords(nodes_new, 'arteries', output_name, 'exnode')
+    pg.export_exfield_1d_linear(radii_new, 'placenta', 'radii', output_name + '_radii')
+
     print('Umbilical cord added. Nodes and elems mapped to shaped hull exported to: ', output_name)
 
     return nodes_new, elems_new, radii_new
@@ -1236,3 +1272,72 @@ def element_connectivity_multi(node_loc, elems):
                         elem_downstream[ne][0] = elem_downstream[ne][0] + 1
                         elem_downstream[ne][elem_downstream[ne][0]] = ne2
     return {'elem_up': elem_upstream, 'elem_down': elem_downstream}
+
+def set_radii_per_parent(tree, parent_list_nodes, parent_list_elems, radii,terminal_villi_radius):
+    nodes = tree['nodes']
+    elems = tree['elems']
+    radii =0
+    orders = pg.evaluate_orders(nodes[:,1:4],elems)
+    EC = pg.element_connectivity_1D(nodes[:,1:4],elems)
+    elem_down = EC['elem_down']
+    print(f"Adjusting radii from {len(parent_list_elems)} parents")
+    # --- Usage ---
+    elem_downstream = build_downstream_dict(elems, elem_down)
+
+    chosen_element = parent_list_elems[0]
+    downstream = get_all_downstream_elements(chosen_element, elem_downstream)
+
+    print(f"Subtree downstream of element {chosen_element}: {sorted(downstream)}")
+
+    return radii
+
+def build_downstream_dict(elements, downstream_array):
+    """
+    Parameters:
+    -----------
+    elements : np.ndarray, shape (N, 3)
+        Columns: [element_id, node1, node2]
+    downstream_array : np.ndarray, shape (N, 3)
+        Columns: [num_downstream, downstream_elem_1, downstream_elem_2]
+        Index corresponds to element array rows.
+        Terminal elements: [0, 0, 0]
+        Single downstream: [1, next_elem, 0]
+        Bifurcation: [2, next_elem_1, next_elem_2]
+    """
+    elem_downstream = {}
+
+    for i, row in enumerate(elements):
+        elem_id = int(row[0])
+        num_down = int(downstream_array[i, 0])
+
+        if num_down == 0:
+            elem_downstream[elem_id] = []          # terminal element
+        elif num_down == 1:
+            elem_downstream[elem_id] = [int(downstream_array[i, 1])]
+        elif num_down == 2:
+            elem_downstream[elem_id] = [int(downstream_array[i, 1]),
+                                        int(downstream_array[i, 2])]
+
+    return elem_downstream
+
+
+def get_all_downstream_elements(start_element, elem_downstream):
+    """
+    BFS traversal to collect all downstream elements from start_element.
+    Returns list excluding the start element itself.
+    """
+    from collections import deque
+
+    visited = set()
+    queue = deque(elem_downstream.get(start_element, []))
+
+    while queue:
+        current = queue.popleft()
+        if current in visited:
+            continue
+        visited.add(current)
+        for next_elem in elem_downstream.get(current, []):
+            if next_elem not in visited:
+                queue.append(next_elem)
+
+    return list(visited)

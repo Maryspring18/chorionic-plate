@@ -41,7 +41,6 @@ debug_export_all = True
 show_debug_images = False
 inlet_type = 'double'
 inlet_node = True
-is_rotate = False
 is_rotated = False
 ###############################################################
 # Parameters that define branching within the placenta volume #
@@ -96,7 +95,7 @@ placenta_mask = read_png(img_input_dir + placenta_filename, 'g')
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
-                                               debug_export_all, is_rotate, rotation_angle)
+                                               debug_export_all)
 
 #Generate and export nodes that are equally spaces in the 3D spaced placental structure
 filename_hull = output_tree_dir + sample_number + '_nodes'
@@ -222,9 +221,12 @@ terminal = pg.calc_terminal_branch(nodes_Umb[:, 1:4], elems_Umb)
 
 branch_structure, branch_data = allocate_branch_numbers(nodes_Umb, elems_Umb)
 pg.export_exfield_1d_linear(branch_structure, 'arteries', 'branch', output_tree_dir + 'branch')
-chorion_nodes, chorion_elems = add_stem_villi(nodes_Umb, elems_Umb, sv_length, terminal)
+real_radii = adjust_terminal_branch_radii(nodes_Umb,elems_Umb,real_radii,terminal)
+chorion_nodes, chorion_elems, chorion_radii = add_stem_villi(nodes_Umb, elems_Umb, sv_length, terminal, real_radii)
 pg.export_exelem_1d(chorion_elems, 'arteries', output_tree_dir + 'chorion')
 pg.export_ex_coords(chorion_nodes, 'arteries', output_tree_dir + 'chorion', 'exnode')
+pg.export_exfield_1d_linear(chorion_radii, 'placenta', 'radii', output_tree_dir + 'chorion_radii')
+
 parent_list_nodes, parent_list_elems = find_parent_list(chorion_nodes, chorion_elems)
 
 print('Chorion mapping complete: ৻(  •̀ ᗜ •́  ৻)')
@@ -271,14 +273,14 @@ if is_rotated:
 pg.export_ex_coords(full_geom_shaped['nodes'], 'placenta', Tree_file, 'exnode')
 pg.export_exelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 radii_hull_elem = pg.define_radius_by_order(full_geom_shaped['nodes'][:, 1:4], full_geom_shaped['elems'], 'strahler',
-                                            0, 0.1, 1.53)
+                                            0, 1.8, 1.53)
 outputfilename = output_tree_dir + 'radii_' + sample_number
 pg.export_exfield_1d_linear(radii_hull_elem, 'placenta', 'radii', outputfilename)
 #ConvertExtoIP(Tree_file)
 pg.export_ip_coords(full_geom_shaped['nodes'][:, 1:4], 'placenta', Tree_file)
 pg.export_ipelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 print('Tree generation complete: ৻(  •̀ ᗜ •́  ৻)')
-
+radii = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,real_radii,0.03)
 volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
 
