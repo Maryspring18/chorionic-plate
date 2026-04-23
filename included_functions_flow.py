@@ -1276,20 +1276,28 @@ def element_connectivity_multi(node_loc, elems):
 def set_radii_per_parent(tree, parent_list_nodes, parent_list_elems, radii,terminal_villi_radius):
     nodes = tree['nodes']
     elems = tree['elems']
-    radii =0
     orders = pg.evaluate_orders(nodes[:,1:4],elems)
+    strahler_order = orders['strahler']
     EC = pg.element_connectivity_1D(nodes[:,1:4],elems)
     elem_down = EC['elem_down']
     print(f"Adjusting radii from {len(parent_list_elems)} parents")
     # --- Usage ---
+    radii_downstream = np.zeros(len(elems))
+    radii_downstream[0:len(radii)] = radii
     elem_downstream = build_downstream_dict(elems, elem_down)
 
-    chosen_element = parent_list_elems[0]
-    downstream = get_all_downstream_elements(chosen_element, elem_downstream)
+    for parent_elem in parent_list_elems:
+        parent_strahler = strahler_order[parent_elem]
+        parent_radius = radii[parent_elem]
+        strahler_ratio = (parent_radius/terminal_villi_radius)**(1/(parent_strahler-1))
 
-    print(f"Subtree downstream of element {chosen_element}: {sorted(downstream)}")
+        downstream = get_all_downstream_elements(parent_elem, elem_downstream)
+        print(f"Adjusting radius for parent elem {parent_elem} with {len(downstream)} children elements")
+        print(f"Parent strahler is {parent_strahler}, Stahler ratio for child vessels is {strahler_ratio}")
+        for elem_num in downstream:
+            radii_downstream[elem_num] = parent_radius/(strahler_ratio **(parent_strahler-strahler_order[elem_num]))
 
-    return radii
+    return radii_downstream
 
 def build_downstream_dict(elements, downstream_array):
     """
@@ -1341,3 +1349,10 @@ def get_all_downstream_elements(start_element, elem_downstream):
                 queue.append(next_elem)
 
     return list(visited)
+
+def reassign_radii(geom, parent_list_nodes, parent_list_elems, radii, terminal_radius):
+    nodes = geom['nodes']
+    elems = geom['elems']
+    elem_down = geom['elem_down']
+
+    return

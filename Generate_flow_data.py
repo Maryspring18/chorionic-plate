@@ -42,6 +42,7 @@ show_debug_images = False
 inlet_type = 'double'
 inlet_node = True
 is_rotated = False
+adjust_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
@@ -280,9 +281,18 @@ pg.export_exfield_1d_linear(radii_hull_elem, 'placenta', 'radii', outputfilename
 pg.export_ip_coords(full_geom_shaped['nodes'][:, 1:4], 'placenta', Tree_file)
 pg.export_ipelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 print('Tree generation complete: ৻(  •̀ ᗜ •́  ৻)')
-radii = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,real_radii,0.03)
+radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,chorion_radii,0.03)
+pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'part_radii_' + sample_number)
+pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
+
 volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
+
+
+
+
+
+
 
 ####################################################################################
 #----------------------------------------------------------------------------------#
