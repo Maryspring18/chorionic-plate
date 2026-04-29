@@ -20,8 +20,8 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23070'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+sample_number = 'PN783'
+img_input_dir = 'Image_input/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -39,7 +39,7 @@ if not os.path.exists(output_table_dir):
 use_custom_pixel_scale = True
 debug_export_all = True
 show_debug_images = False
-inlet_type = 'double'
+inlet_type = 'single'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
@@ -82,10 +82,10 @@ if use_custom_pixel_scale:
     pixel_scale = get_scale(10, scale_file)
 print('Scale: ' + str(pixel_scale) + ' mm/pixel')
 #read placenta outline
-placenta_area_filename = sample_number + '_area.png'
-green_pixels, placenta_area = calculate_area(img_input_dir+placenta_area_filename,pixel_scale, show_debug_images)
-print(f"Number of Green Pixels: {green_pixels}")
-print(f"Area in mm²: {placenta_area:.2f}")
+#placenta_area_filename = sample_number + '_area.png'
+#green_pixels, placenta_area = calculate_area(img_input_dir+placenta_area_filename,pixel_scale, show_debug_images)
+#print(f"Number of Green Pixels: {green_pixels}")
+#print(f"Area in mm²: {placenta_area:.2f}")
 #######################################################################
 #-------------------Ellipse/Hull Generation---------------------------#
 #######################################################################
@@ -151,7 +151,7 @@ print('Hull Generation complete: ⸜(｡˃ ᵕ ˂ )⸝♡')
 #------------------- Artery tree Generation---------------------------#
 #######################################################################
 #arteries = read_png(img_input_dir + 'arteries_' + sample_number + '.png', 'r')
-arteries = read_png(img_input_dir + sample_number + '_vessels.png', 'r')
+arteries = read_png(img_input_dir + sample_number + '_vesseloutlines.png', 'r')
 
 euc_dist_image = get_euclidean_distance(arteries)
 
@@ -190,14 +190,14 @@ if debug_export_all:
 outputfilename = output_tree_dir + 'arteries_hull_scaled_' + sample_number
 arterial_shaped_nodes = map_nodes_to_hull(nodes_scaled, hull_params, thickness, outputfilename, debug_export_all)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-trees = split_trees(arterial_shaped_nodes, art_elems, real_radii)
+#trees = split_trees(arterial_shaped_nodes, art_elems, real_radii)
 
 if inlet_type == 'single':
     trees = define_geom(arterial_shaped_nodes,art_elems,real_radii)
 elif inlet_type == 'double':
     trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,False)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,True)
 if inlet_type == 'single':
     radius_inlet_branch = get_inlet_branch_radius(Geom_A)
     Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
@@ -354,7 +354,8 @@ name = 'inlet'
 if adjusted_radi:
     Radius_file = output_tree_dir + 'tree_radii_' + sample_number + '.ipfiel'
     define_rad_from_file(Radius_file,order_system,s_ratio)
-    update_1d_elem_field(9,5,3)
+    if inlet_type == 'double':
+        update_1d_elem_field(9,5,3)
 else:
     define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
 # defines radius by Strahler order in converging (venous mesh)
@@ -431,7 +432,7 @@ print('Pressure and flow files exported ৻(  •̀ ᗜ •́  ৻)')
 ###############################################################
 
 #Region of interest : stem_villi or order
-ROI = 'order'
+ROI = 'chorion'
 #order type (only if order is of importance
 order_category = 'strahler'
 #Orders of interest
@@ -456,8 +457,8 @@ pressure_file = pg.import_exnode_tree(output_flow_dir + 'pressue_perf_' + sample
 pressure = pressure_file['nodes']
 nodes = full_geom_shaped['nodes']
 elems = full_geom_shaped['elems']
-nodes_chorion = nodes_Umb
-elems_chorion = elems_Umb
+nodes_chorion = chorion_nodes
+elems_chorion = chorion_elems
 print('Reading Radius file')
 
 radii = pg.import_exelem_field(output_flow_dir + 'radius_perf_' + sample_number + '.exelem')
@@ -505,6 +506,29 @@ elif ROI == 'order':
     #order_interest = [max_order - 1, max_order]
     for elem_i in range(0, len(order)):
         if order[elem_i] in order_interest:
+            shear_stress = (4 * viscosity * flow[elem_i]) / (np.pi * (radii[elem_i] ** 3))
+
+            new_value = np.asarray([int(elems[elem_i, 0]), radii[elem_i], flow[elem_i], pressure[elems[elem_i, 1]][1],
+                                    pressure[elems[elem_i, 2]][1], shear_stress, order[elem_i]])
+            elements.append(new_value)
+
+elif ROI == 'chorion':
+    print('Region of Interest: Chorion')
+
+    if order_category == 'strahler':
+        order = order_array[order_category]
+    elif order_category == 'horsfield':
+        order = order_array[order_category]
+    elif order_category == 'generation':
+        order = order_array[order_category]
+    else:
+        print('Order category incorrectly defined')
+        exit()
+    print('Order system: ', order_category)
+    interest_elements = []
+    max_order = np.max(order)
+    for elem_i in range(0, len(order)):
+        if elem_i in elems_chorion:
             shear_stress = (4 * viscosity * flow[elem_i]) / (np.pi * (radii[elem_i] ** 3))
 
             new_value = np.asarray([int(elems[elem_i, 0]), radii[elem_i], flow[elem_i], pressure[elems[elem_i, 1]][1],
