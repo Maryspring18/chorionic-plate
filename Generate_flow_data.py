@@ -13,7 +13,7 @@ from reprosim.diagnostics import set_diagnostics_level
 from reprosim.indices import perfusion_indices, get_ne_radius
 from reprosim.geometry import append_units, define_node_geometry, define_1d_element_placenta, define_rad_from_geom, \
     add_matching_mesh, \
-    define_capillary_model, define_rad_from_file
+    define_capillary_model, define_rad_from_file, update_1d_elem_field
 from reprosim.repro_exports import export_1d_elem_geometry, export_node_geometry, export_1d_elem_field, \
     export_node_field, export_terminal_perfusion
 from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
@@ -42,7 +42,8 @@ show_debug_images = False
 inlet_type = 'double'
 inlet_node = True
 is_rotated = False
-adjust_radi = True #Adjusting hte radius of the grown branches
+constant_vasc_density = True
+adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
@@ -130,7 +131,11 @@ plac_nodes = dict.fromkeys(['nodes'])
 plac_nodes['nodes'] = datapoints_ellipse_array
 
 ellipse_hull, xcentre, ycentre, zcentre, volume = equispaced_data_in_hull(n_seed,plac_nodes)
-n_seed_adjusted = int((volume*n_seed)/Reference_volume)
+if constant_vasc_density:
+    n_seed_adjusted = int((volume*n_seed)/Reference_volume)
+    print(f"Reference volume is {Reference_volume}, adjusted seed points to {n_seed_adjusted}.")
+else:
+    n_seed_adjusted = n_seed
 ellipse_hull, xcentre, ycentre,zcentre, volume = equispaced_data_in_hull(n_seed_adjusted,plac_nodes)
 print('Adjusted seed points based on volume')
 
@@ -281,10 +286,10 @@ pg.export_exfield_1d_linear(radii_hull_elem, 'placenta', 'radii', outputfilename
 pg.export_ip_coords(full_geom_shaped['nodes'][:, 1:4], 'placenta', Tree_file)
 pg.export_ipelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 print('Tree generation complete: ৻(  •̀ ᗜ •́  ৻)')
-radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,chorion_radii,0.03)
+radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,chorion_radii,0.06)
 pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'part_radii_' + sample_number)
 pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
-
+pg.export_ipfiel(radii_downstream,output_tree_dir + 'tree_radii_' + sample_number)
 volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
 
@@ -323,7 +328,7 @@ mesh_type = 'full_plus_tube'
 #mesh that converges onto the arterial tree
 umbilical_elem_option = 'same_as_arterial'
 #Boundary condition type: Needs to be either Inlet Pressure and Outlet Pressure or Outlet pressure and inlet flow rate
-bc_type = 'pressure'  # 'pressure' or 'flow'
+bc_type = 'flow'  # 'pressure' or 'flow'
 #Rheology is constant viscosity. Can also account for the effects of RBC on viscosity
 rheology_type = 'constant_visc'
 #Vessel type can be rigid or a elastic as a function of diameter
@@ -346,7 +351,12 @@ inlet_rad = 1.8  # inlet radius
 order_system = 'strahler'
 order_options = 'arterial'
 name = 'inlet'
-define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
+if adjusted_radi:
+    Radius_file = output_tree_dir + 'tree_radii_' + sample_number + '.ipfiel'
+    define_rad_from_file(Radius_file,order_system,s_ratio)
+    update_1d_elem_field(9,5,3)
+else:
+    define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
 # defines radius by Strahler order in converging (venous mesh)
 s_ratio_ven = 1.46  # rate of decrease in radius at each order of the venous tree 1.46
 inlet_rad_ven = 4.0  # inlet radius
@@ -354,6 +364,7 @@ order_system = 'strahler'
 order_options = 'venous'
 first_ven_no = ''  # number of elements read in plus one
 last_ven_no = ''  # 2x the original number of elements + number of connections
+
 define_rad_from_geom(order_system, s_ratio_ven, first_ven_no, inlet_rad_ven, order_options, last_ven_no)
 
 print('Venous mesh created using parameter and order system:', umbilical_elem_option, order_system)
@@ -378,7 +389,7 @@ if bc_type == 'pressure':
 if bc_type == 'flow':
     inlet_pressure = 0
     outlet_pressure = 2660
-    inlet_flow = 4166.7  # mm3/s
+    inlet_flow = 2083.35   #4166.7  # mm3/s
 
 ####################################################################################
 # ---------------- Solve Pressure, resistance and flow rate----------------------- #
