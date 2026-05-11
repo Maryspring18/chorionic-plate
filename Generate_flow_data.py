@@ -20,8 +20,8 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23070'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+sample_number = 'JT25023'
+img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -43,13 +43,13 @@ inlet_type = 'double'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = True #Adjusting hte radius of the grown branches
+adjusted_radi = False #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-Reference_volume = 427700
+Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
 #Minimum angle between two branches
@@ -252,7 +252,7 @@ chorion_and_stem_shaped['elem_down'] = elem_cnct_shaped['elem_down']
 #------------------- Tree Generation---------------------------#
 #Grow tree with hull
 full_geom_shaped = pg.grow_large_tree(angle_max_ft, angle_min_ft, fraction_ft, min_length_ft, point_limit_ft, volume,
-                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1, parent_list_elems)
+                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1,parent_list_elems)
 
 Tree_file = output_tree_dir + 'full_tree_' + sample_number
 
@@ -291,6 +291,8 @@ pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_d
 pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
 pg.export_ipfiel(radii_downstream,output_tree_dir + 'tree_radii_' + sample_number)
 volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
+print(f"vessel volume is {vessel_volumes} mm3" )
+print(f"volume is {volume}")
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
 
 
