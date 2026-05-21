@@ -49,6 +49,7 @@ adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
+weight = 300 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
@@ -93,7 +94,14 @@ print(f"Area in mm²: {placenta_area:.2f}")
 placenta_filename = sample_number + '_outline.png'
 
 placenta_mask = read_png(img_input_dir + placenta_filename, 'g')
-
+#Fit an ellipse to the placental outline. Weighting to bias the placenta so that more of the
+#placental outline is inside the ellipse. This is to find centre point
+[x, y, ellipse_fit] = fit_ellipse_2d(placenta_mask, 0.8)
+x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
+y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
+vol_mm3 = weight * 1000
+#volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
+thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm) #thickness assuming ellipsoid
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
@@ -108,12 +116,9 @@ if debug_export_all:
     pg.export_ex_coords(datapoints, 'placenta', filename_hull, 'exnode')
     print('Node files for placental hull generated and exported to:', filename_hull)
 
-#Fit an ellipse to the placental outline. Weighting to bias the placenta so that more of the
-#placental outline is inside the ellipse. This is to find centre point
-[x, y, ellipse_fit] = fit_ellipse_2d(placenta_mask, 0.8)
-x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
-y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
-volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
+
+
+
 
 #-------------------Transform the 3D hull ---------------------------#
 # Calculate the desired center in real-world coordinates
