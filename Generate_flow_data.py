@@ -20,7 +20,7 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT25023'
+sample_number = 'JT23078'
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
@@ -43,7 +43,7 @@ inlet_type = 'double'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = False #Adjusting hte radius of the grown branches
+adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
