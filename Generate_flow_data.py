@@ -20,7 +20,7 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'PN783'
+sample_number = 'PE153'
 img_input_dir = 'Image_input/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
@@ -43,7 +43,7 @@ inlet_type = 'single'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = True #Adjusting hte radius of the grown branches
+adjusted_radi = False #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
@@ -379,7 +379,7 @@ print('Vessel type:', vessel_type)
 num_convolutes = 10  # number of terminal convolute connections
 num_generations = 3  # number of generations of symmetric intermediate villous trees
 num_parallel = 6  # number of capillaries per convolute
-define_capillary_model(num_convolutes, num_generations, num_parallel, 'byrne_simplified')
+define_capillary_model(num_convolutes, num_generations, num_parallel, 'interface2015')
 
 #Defining boundary conditions. Value at zero is a dummy variable
 if bc_type == 'pressure':
@@ -390,14 +390,14 @@ if bc_type == 'pressure':
 if bc_type == 'flow':
     inlet_pressure = 0
     outlet_pressure = 2660
-    inlet_flow = 2083.35   #4166.7  # mm3/s
+    inlet_flow = 4166.7   #4166.7  # mm3/s
 
 ####################################################################################
 # ---------------- Solve Pressure, resistance and flow rate----------------------- #
 ####################################################################################
 
 evaluate_prq(mesh_type, bc_type, rheology_type, vessel_type, inlet_flow, inlet_pressure, outlet_pressure)
-
+calculate_stats(output_flow_dir + 'terminal_' +sample_number + ',exnode',1,1)
 print('Pressure and flow simulation complete: ৻(  •̀ ᗜ •́  ৻)')
 
 ##export geometry

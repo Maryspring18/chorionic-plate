@@ -321,5 +321,5 @@ export_region_as_csv(G, 'chorion',output_flow_dir+sample_number+'_ROI.csv', chor
 print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
 #export_all(G, 'placenta', output_flow_dir + 'FF_' + sample_number, 'all')
 #export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
-visualise_tree(G, False, 'arteries')
+visualise_tree(G, True, 'arteries')
 print('End of Code')
