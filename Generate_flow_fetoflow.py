@@ -9,19 +9,12 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 from skan import draw, Skeleton, summarize
-from reprosim.diagnostics import set_diagnostics_level
-from reprosim.indices import perfusion_indices, get_ne_radius
-from reprosim.geometry import append_units, define_node_geometry, define_1d_element_placenta, define_rad_from_geom, \
-    add_matching_mesh, \
-    define_capillary_model, define_rad_from_file, update_1d_elem_field
-from reprosim.repro_exports import export_1d_elem_geometry, export_node_geometry, export_1d_elem_field, \
-    export_node_field, export_terminal_perfusion
-from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
+from fetoflow import *
 import csv
 import os
 
 sample_number = 'JT23070'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/' #'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -49,7 +42,7 @@ adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-weight = 300 #g but is a proxy for cm3 since density of water is 1 g/cm3
+weight = 500 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
@@ -102,6 +95,7 @@ y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+print(f"X length is {x_mm} and y length is {y_mm}, Calculated Thickness is {thickness}")
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
@@ -295,287 +289,51 @@ radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,paren
 pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'part_radii_' + sample_number)
 pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
 pg.export_ipfiel(radii_downstream,output_tree_dir + 'tree_radii_' + sample_number)
-volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
+volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_downstream,full_geom_shaped['elems'])
 print(f"vessel volume is {vessel_volumes} mm3" )
 print(f"volume is {volume}")
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
 
 
-
-
-
-
-
 ####################################################################################
 #----------------------------------------------------------------------------------#
-#----------------------- Flow and Pressure Generation------------------------------#
+#------------------------------------ Fetoflow ------------------------------------#
 #----------------------------------------------------------------------------------#
 ####################################################################################
 
-print('Beginning flow and pressure simulations (ó﹏ò｡)')
+#nodes = read_nodes(img_input_dir + 'full_tree_PN783.ipnode')
+#elems = read_elements(img_input_dir + 'full_tree_PN783.ipelem')
+#radii = define_fields_from_files({'radius':img_input_dir+'tree_radii_'+sample_number+'.ipfiel'})
 
-###############################################################
-# --------------- Flow simulation setup --------------------- #
-###############################################################
+nodes = set_nodes_from_array(full_geom_shaped['nodes'])
+elems = set_edges_from_array(full_geom_shaped['elems'])
+radii = set_fields_from_array(radii_downstream,'radius')
+outlet_pressure, inlet_flow, inlet_pressure = 2660, 2083.35, 6650
+bcs = generate_boundary_conditions(outlet_pressure=outlet_pressure, inlet_flow=inlet_flow)
+# define other required geometric features (radii and decay factors)
+umbilical_artery_radius, decay_factor = 1.8, 1.38  # 1.51795
+umbilical_vein_radius, decay_factor_vein = 4.0, 1.46
+arteries_only = False  # this should rarely be true
+viscosity_type = 'constant'  # can also be 'pries_network' or 'pries_vessel' if wanting to incorporate radius-dependence
 
-set_diagnostics_level(
-    0)  # level 0 - no diagnostics; level 1 - only prints subroutine names (default); level 2 - prints subroutine names and contents of variables
-perfusion_indices()
-#Load node points in tree
-print("Reading elem file", Tree_file)
-define_node_geometry(Tree_file + '.ipnode')
-#Load elements in tree
-define_1d_element_placenta(Tree_file + '.ipelem')
-
-# mesh_type: can be 'simple_tree' or 'full_plus_tube'. Simple_tree is the input
-## arterial tree without any special features at the terminal level
-# 'full_plus_tube' creates a matching venous mesh and has arteries and
-## veins connected by capillary units (capillaries are just tubes represented by an element)
-mesh_type = 'full_plus_tube'
-#mesh that converges onto the arterial tree
-umbilical_elem_option = 'same_as_arterial'
-#Boundary condition type: Needs to be either Inlet Pressure and Outlet Pressure or Outlet pressure and inlet flow rate
-bc_type = 'flow'  # 'pressure' or 'flow'
-#Rheology is constant viscosity. Can also account for the effects of RBC on viscosity
-rheology_type = 'constant_visc'
-#Vessel type can be rigid or a elastic as a function of diameter
-vessel_type = 'rigid'
-
-# define terminal units (this subroutine always needs to be called regardless of mesh_type
-append_units()
-
-###############################################################
-# --------------- Venous mesh Creation ---------------------- #
-###############################################################
-
-#venous mesh creation
-umbilical_elements = []
-add_matching_mesh(umbilical_elem_option, umbilical_elements)
-
-# define radius by Strahler order in diverging (arterial mesh)
-s_ratio = 1.38  # rate of decrease in radius at each order of the arterial tree  1.38
-inlet_rad = 1.8  # inlet radius
-order_system = 'strahler'
-order_options = 'arterial'
-name = 'inlet'
+# Generate the di-graph & calculate the resistances based on the viscosity
+print("Creating Geometry")
 if adjusted_radi:
-    Radius_file = output_tree_dir + 'tree_radii_' + sample_number + '.ipfiel'
-    define_rad_from_file(Radius_file,order_system,s_ratio)
-    update_1d_elem_field(9,5,3)
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii, anastomsis= True)
 else:
-    define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
-# defines radius by Strahler order in converging (venous mesh)
-s_ratio_ven = 1.46  # rate of decrease in radius at each order of the venous tree 1.46
-inlet_rad_ven = 4.0  # inlet radius
-order_system = 'strahler'
-order_options = 'venous'
-first_ven_no = ''  # number of elements read in plus one
-last_ven_no = ''  # 2x the original number of elements + number of connections
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only)
 
-define_rad_from_geom(order_system, s_ratio_ven, first_ven_no, inlet_rad_ven, order_options, last_ven_no)
-
-print('Venous mesh created using parameter and order system:', umbilical_elem_option, order_system)
-print('Viscosity:', rheology_type)
-print('Vessel type:', vessel_type)
-
-###############################################################
-# ---------------- Capillary Creation ----------------------- #
-###############################################################
-
-num_convolutes = 10  # number of terminal convolute connections
-num_generations = 3  # number of generations of symmetric intermediate villous trees
-num_parallel = 6  # number of capillaries per convolute
-define_capillary_model(num_convolutes, num_generations, num_parallel, 'interface2015')
-
-#Defining boundary conditions. Value at zero is a dummy variable
-if bc_type == 'pressure':
-    inlet_pressure = 6650  # Pa (~50mmHg)
-    outlet_pressure = 2660  # Pa (~20mmHg)
-    inlet_flow = 0  # set to 0 for bc_type = pressure;
-
-if bc_type == 'flow':
-    inlet_pressure = 0
-    outlet_pressure = 2660
-    inlet_flow = 2083.35   #4166.7  # mm3/s
-
-####################################################################################
-# ---------------- Solve Pressure, resistance and flow rate----------------------- #
-####################################################################################
-
-evaluate_prq(mesh_type, bc_type, rheology_type, vessel_type, inlet_flow, inlet_pressure, outlet_pressure)
-
-print('Pressure and flow simulation complete: ৻(  •̀ ᗜ •́  ৻)')
-
-##export geometry
-group_name = 'perf_model'
-#Full_flow_tree files include venous mesh that matches arterial mesh
-export_1d_elem_geometry(output_flow_dir + 'full_flow_tree_' + sample_number + '.exelem', group_name)
-export_node_geometry(output_flow_dir + 'full_flow_tree_' + sample_number + '.exnode', group_name)
-
-# # export element field for radius
-field_name = 'radius_perf'
-ne_radius = get_ne_radius()
-export_1d_elem_field(ne_radius, output_flow_dir + 'radius_perf_' + sample_number + '.exelem', group_name, field_name)
-# export flow in each element
-field_name = 'flow'
-export_1d_elem_field(7, output_flow_dir + 'flow_perf_' + sample_number + '.exelem', group_name, field_name)
-#export node field for pressure
-field_name = 'pressure_perf'
-export_node_field(1, output_flow_dir + 'pressue_perf_' + sample_number + '.exnode', group_name, field_name)
-# Export terminal solution
-export_terminal_perfusion(output_flow_dir + 'terminal_' + sample_number + '.exnode', 'terminal_soln')
-print('Pressure and flow files exported ৻(  •̀ ᗜ •́  ৻)')
-
-####################################################################################
-#----------------------------------------------------------------------------------#
-#------------------------------- Data extraction ----------------------------------#
-#----------------------------------------------------------------------------------#
-####################################################################################
-
-
-###############################################################
-# --------------------- Parameters -------------------------- #
-###############################################################
-
-#Region of interest : stem_villi or order
-ROI = 'order'
-#order type (only if order is of importance
-order_category = 'strahler'
-#Orders of interest
-order_interest = [6, 7, 8, 9]
-viscosity = 0.0033600
-
-#Needs to have .csv at the end
-output_filename = sample_number + '_' + order_category + '.csv'
-###############################################################
-# ----------------------- File I/O -------------------------- #
-###############################################################
-
-nodes_file = pg.import_exnode_tree(output_flow_dir + 'full_flow_tree_' + sample_number + '.exnode')
-print('Reading Element file')
-elems_file = pg.import_exelem_tree(output_flow_dir + 'full_flow_tree_' + sample_number + '.exelem')
-print('Reading Node file')
-
-#nodes_chorion_file = pg.import_exnode_tree(output_tree_dir + 'Umb_' + '.exnode')
-#elems_chorion_file = pg.import_exelem_tree(output_tree_dir + 'final_chorion_geom' + '.exelem')
-pressure_file = pg.import_exnode_tree(output_flow_dir + 'pressue_perf_' + sample_number + '.exnode')
-
-pressure = pressure_file['nodes']
-nodes = full_geom_shaped['nodes']
-elems = full_geom_shaped['elems']
-nodes_chorion = nodes_Umb
-elems_chorion = elems_Umb
-print('Reading Radius file')
-
-radii = pg.import_exelem_field(output_flow_dir + 'radius_perf_' + sample_number + '.exelem')
-
-volume, vessel_volumes, lengths = get_vessel_volume(nodes_file['nodes'],radii,elems_file['elems'])
-print('total vessel volume: ' + str(volume))
-print('Reading Flow file')
-
-flow = pg.import_exelem_field(output_flow_dir + 'flow_perf_' + sample_number + '.exelem')
-print('Calculating Orders file')
-
-order_array = pg.evaluate_orders(nodes[:, 1:4], elems)
-elements = []
-if ROI == 'stem_villi':
-    print('Region of Interest: Stem Villi')
-
-    elem_cncty = pg.element_connectivity_1D(nodes_chorion[:, 1:4], elems_chorion)
-    elem_up = elem_cncty['elem_up']
-    elem_down = elem_cncty['elem_down']
-    elem_downstream_end = []
-    for i in range(0, len(elem_down)):
-        if (elem_down[i, 0] == 0):
-            elem_downstream_end.append(i)
-    for element in elem_downstream_end:
-        shear_stress = (4 * viscosity * flow[element]) / (np.pi * (radii[element] ** 3))
-        new_value = np.asarray(
-            [elems_chorion[element, 0], radii[element], flow[element], pressure[elems_chorion[element, 1]][1],
-             pressure[elems_chorion[element, 2]][1], 0], shear_stress)
-        elements.append(new_value)
-elif ROI == 'order':
-    print('Region of Interest: Order system')
-
-    if order_category == 'strahler':
-        order = order_array[order_category]
-    elif order_category == 'horsfield':
-        order = order_array[order_category]
-    elif order_category == 'generation':
-        order = order_array[order_category]
-    else:
-        print('Order category incorrectly defined')
-        exit()
-    print('Order system: ', order_category)
-    interest_elements = []
-    max_order = np.max(order)
-    #order_interest = [max_order - 1, max_order]
-    for elem_i in range(0, len(order)):
-        if order[elem_i] in order_interest:
-            shear_stress = (4 * viscosity * flow[elem_i]) / (np.pi * (radii[elem_i] ** 3))
-
-            new_value = np.asarray([int(elems[elem_i, 0]), radii[elem_i], flow[elem_i], pressure[elems[elem_i, 1]][1],
-                                    pressure[elems[elem_i, 2]][1], shear_stress, order[elem_i]])
-            elements.append(new_value)
-
-element_array = np.array(elements)
-
-# Calculate averages for each column (excluding the first column)
-average_radius = np.mean(element_array[:, 1])
-average_flow_rate = np.mean(element_array[:, 2])
-average_inlet_pressure = np.mean(element_array[:, 3])
-average_outlet_pressure = np.mean(element_array[:, 4])
-median_radius = np.median(element_array[:, 1])
-median_flow_rate = np.median(element_array[:, 2])
-median_inlet_pressure = np.median(element_array[:, 3])
-median_outlet_pressure = np.median(element_array[:, 4])
-upper_radius = np.max(element_array[:, 1])
-upper_flow_rate = np.max(element_array[:, 2])
-upper_inlet_pressure = np.max(element_array[:, 3])
-upper_outlet_pressure = np.max(element_array[:, 4])
-lower_radius = np.min(element_array[:, 1])
-lower_flow_rate = np.min(element_array[:, 2])
-lower_inlet_pressure = np.min(element_array[:, 3])
-lower_outlet_pressure = np.min(element_array[:, 4])
-average_shear_stress = np.mean(element_array[:, 5])
-median_shear_stress = np.median(element_array[:, 5])
-lower_shear_stress = np.min(element_array[:, 5])
-upper_shear_stress = np.max(element_array[:, 5])
-print('Average Radius:', average_radius)
-print('Average Flow:', average_flow_rate)
-print('Average Inlet Pressure:', average_inlet_pressure)
-print('Average Outlet Pressure:', average_outlet_pressure)
-print('Average Shear Stress: ', average_shear_stress)
-# Prepare the average data row
-
-average_row = ['Average', average_radius, average_flow_rate, average_inlet_pressure, average_outlet_pressure, average_shear_stress]
-median_row = ['Median', median_radius, median_flow_rate, median_inlet_pressure, median_outlet_pressure, median_shear_stress]
-upper_row = ['Maximum', upper_radius, upper_flow_rate, upper_inlet_pressure, upper_outlet_pressure, upper_shear_stress]
-lower_row = ['Minimum', lower_radius, lower_flow_rate, lower_inlet_pressure, lower_inlet_pressure, lower_shear_stress]
-
-# Create file if it doesn't exist and write data with headers
-try:
-    with open(output_flow_dir + output_filename, mode='x', newline='') as file:
-        writer = csv.writer(file)
-        # Write headers
-        writer.writerow(
-            ['Element Number', 'Radius', 'Flow Rate', 'Inlet Pressure', 'Outlet Pressure', 'Shear Stress', 'Order'])
-        # Write data
-        writer.writerows(element_array)
-
-        writer.writerow(average_row)
-        writer.writerow(median_row)
-        writer.writerow(upper_row)
-        writer.writerow(lower_row)
-
-    print("File created and data written with headers.")
-except FileExistsError:
-    with open(output_flow_dir + output_filename, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        # Write data without headers
-        writer.writerows(element_array)
-        writer.writerow(average_row)
-        writer.writerow(median_row)
-        writer.writerow(upper_row)
-        writer.writerow(lower_row)
-    print("File already exists. Appending data without headers.")
+print("Calculating Resistance")
+G = calculate_resistance(G, viscosity_model=viscosity_type)
+print("Calculating Matrices")
+A, b, bc_export = create_small_matrices(G, bcs, branching_angles=False)
+print("Solving for Pressures and Flows")
+p, q = solve_small_system(A, b, G, bc_export)
+G = update_geometry_with_pressures_and_flows(G, p, q)
+inlet_measure, outlet_measure = get_tree_properties(G)
+export_region_as_csv(G, 'chorion',output_flow_dir+sample_number+'_ROI.csv', chorion_elems = chorion_elems[:,0], order_interest= None)
+print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
+#export_all(G, 'placenta', output_flow_dir + 'FF_' + sample_number, 'all')
+#export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
+visualise_tree(G, True, 'arteries')
+print('End of Code')
