@@ -20,8 +20,21 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
+<<<<<<< HEAD
 sample_number = 'JT23078'
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+=======
+sample_number = 'JT23070'
+img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/' #'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
+=======
+sample_number = 'JT23070'
+img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/' #'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
+=======
+sample_number = 'JT23070'
+img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/' #'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -101,7 +114,20 @@ x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
 y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm) #thickness assuming ellipsoid
+print(f"thickness: {thickness} mm")
+=======
+thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
+=======
+thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
+=======
+thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+>>>>>>> bb3e61cb05e9c41d26eb71704b0eb383d0ae1c60
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
@@ -385,7 +411,7 @@ print('Vessel type:', vessel_type)
 num_convolutes = 10  # number of terminal convolute connections
 num_generations = 3  # number of generations of symmetric intermediate villous trees
 num_parallel = 6  # number of capillaries per convolute
-define_capillary_model(num_convolutes, num_generations, num_parallel, 'byrne_simplified')
+define_capillary_model(num_convolutes, num_generations, num_parallel, 'interface2015')
 
 #Defining boundary conditions. Value at zero is a dummy variable
 if bc_type == 'pressure':
