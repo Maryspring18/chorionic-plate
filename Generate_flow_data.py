@@ -20,8 +20,8 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23070'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/' #'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+sample_number = 'JT23078'
+img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -101,6 +101,8 @@ x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
 y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
+thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm) #thickness assuming ellipsoid
+print(f"thickness: {thickness} mm")
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
 print(f"Calculate thickness is {thickness} mm")
 #Generate the outline of the placenta in 3D
