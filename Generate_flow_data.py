@@ -13,7 +13,7 @@ from reprosim.diagnostics import set_diagnostics_level
 from reprosim.indices import perfusion_indices, get_ne_radius
 from reprosim.geometry import append_units, define_node_geometry, define_1d_element_placenta, define_rad_from_geom, \
     add_matching_mesh, \
-    define_capillary_model, define_rad_from_file, update_1d_elem_field
+    define_capillary_model, define_rad_from_file, update_1d_elem_field, create_anastomosis
 from reprosim.repro_exports import export_1d_elem_geometry, export_node_geometry, export_1d_elem_field, \
     export_node_field, export_terminal_perfusion
 from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
@@ -102,6 +102,7 @@ y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+print(f"Calculate thickness is {thickness} mm")
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
@@ -333,7 +334,7 @@ define_1d_element_placenta(Tree_file + '.ipelem')
 ## veins connected by capillary units (capillaries are just tubes represented by an element)
 mesh_type = 'full_plus_tube'
 #mesh that converges onto the arterial tree
-umbilical_elem_option = 'same_as_arterial'
+umbilical_elem_option = 'single_umbilical_vein'
 #Boundary condition type: Needs to be either Inlet Pressure and Outlet Pressure or Outlet pressure and inlet flow rate
 bc_type = 'flow'  # 'pressure' or 'flow'
 #Rheology is constant viscosity. Can also account for the effects of RBC on viscosity
@@ -349,7 +350,8 @@ append_units()
 ###############################################################
 
 #venous mesh creation
-umbilical_elements = []
+
+umbilical_elements = [1,3]
 add_matching_mesh(umbilical_elem_option, umbilical_elements)
 
 # define radius by Strahler order in diverging (arterial mesh)
@@ -361,7 +363,7 @@ name = 'inlet'
 if adjusted_radi:
     Radius_file = output_tree_dir + 'tree_radii_' + sample_number + '.ipfiel'
     define_rad_from_file(Radius_file,order_system,s_ratio)
-    update_1d_elem_field(9,5,3)
+    #update_1d_elem_field(9,5,3)
 else:
     define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
 # defines radius by Strahler order in converging (venous mesh)
@@ -373,7 +375,7 @@ first_ven_no = ''  # number of elements read in plus one
 last_ven_no = ''  # 2x the original number of elements + number of connections
 
 define_rad_from_geom(order_system, s_ratio_ven, first_ven_no, inlet_rad_ven, order_options, last_ven_no)
-
+create_anastomosis(2,4,1)
 print('Venous mesh created using parameter and order system:', umbilical_elem_option, order_system)
 print('Viscosity:', rheology_type)
 print('Vessel type:', vessel_type)
@@ -403,7 +405,7 @@ if bc_type == 'flow':
 ####################################################################################
 
 evaluate_prq(mesh_type, bc_type, rheology_type, vessel_type, inlet_flow, inlet_pressure, outlet_pressure)
-
+calculate_stats(output_flow_dir + 'flowout', 1, 1)
 print('Pressure and flow simulation complete: ৻(  •̀ ᗜ •́  ৻)')
 
 ##export geometry
