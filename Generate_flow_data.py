@@ -101,9 +101,8 @@ x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
 y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
-thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm) #thickness assuming ellipsoid
-print(f"thickness: {thickness} mm")
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+print(f"thickness: {thickness} mm")
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
