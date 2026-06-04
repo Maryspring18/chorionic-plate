@@ -13,15 +13,15 @@ from reprosim.diagnostics import set_diagnostics_level
 from reprosim.indices import perfusion_indices, get_ne_radius
 from reprosim.geometry import append_units, define_node_geometry, define_1d_element_placenta, define_rad_from_geom, \
     add_matching_mesh, \
-    define_capillary_model, define_rad_from_file, update_1d_elem_field
+    define_capillary_model, define_rad_from_file, update_1d_elem_field, create_anastomosis
 from reprosim.repro_exports import export_1d_elem_geometry, export_node_geometry, export_1d_elem_field, \
     export_node_field, export_terminal_perfusion
 from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23078'
-img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+sample_number = 'PE153'
+img_input_dir = '/Image_input/' +sample_number + '/' #'/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -49,7 +49,7 @@ adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-weight = 300 #g but is a proxy for cm3 since density of water is 1 g/cm3
+weight = 500 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
@@ -63,10 +63,7 @@ min_length_ft = 1.0  #mm
 point_limit_ft = 1
 #pixel density
 pixel_scale = 0.04 #mm/pixel
-#placenta measurements
-thickness = 20 #mm
-t_pixels = int(thickness / pixel_scale)
-t_half = int(t_pixels * 2)
+
 #SV and umbilical cord
 sv_length = 2.0  #mm
 umbilical_length = 10.0  #mm
@@ -100,9 +97,10 @@ placenta_mask = read_png(img_input_dir + placenta_filename, 'g')
 x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
 y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
-#volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
+
 thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
-print(f"thickness: {thickness} mm")
+print(f"Calculate thickness is {thickness} mm")
+
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
 plac_outline_nodes = generate_placenta_outline(placenta_mask, pixel_scale, thickness, outputfilename, show_debug_images,
@@ -296,7 +294,7 @@ radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,paren
 pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'part_radii_' + sample_number)
 pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
 pg.export_ipfiel(radii_downstream,output_tree_dir + 'tree_radii_' + sample_number)
-volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_hull_elem,full_geom_shaped['elems'])
+volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_downstream,full_geom_shaped['elems'])
 print(f"vessel volume is {vessel_volumes} mm3" )
 print(f"volume is {volume}")
 pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems'])
@@ -334,7 +332,7 @@ define_1d_element_placenta(Tree_file + '.ipelem')
 ## veins connected by capillary units (capillaries are just tubes represented by an element)
 mesh_type = 'full_plus_tube'
 #mesh that converges onto the arterial tree
-umbilical_elem_option = 'same_as_arterial'
+umbilical_elem_option = 'single_umbilical_vein'
 #Boundary condition type: Needs to be either Inlet Pressure and Outlet Pressure or Outlet pressure and inlet flow rate
 bc_type = 'flow'  # 'pressure' or 'flow'
 #Rheology is constant viscosity. Can also account for the effects of RBC on viscosity
@@ -350,7 +348,8 @@ append_units()
 ###############################################################
 
 #venous mesh creation
-umbilical_elements = []
+
+umbilical_elements = [1,3]
 add_matching_mesh(umbilical_elem_option, umbilical_elements)
 
 # define radius by Strahler order in diverging (arterial mesh)
@@ -362,7 +361,7 @@ name = 'inlet'
 if adjusted_radi:
     Radius_file = output_tree_dir + 'tree_radii_' + sample_number + '.ipfiel'
     define_rad_from_file(Radius_file,order_system,s_ratio)
-    update_1d_elem_field(9,5,3)
+    #update_1d_elem_field(9,5,3)
 else:
     define_rad_from_geom(order_system, s_ratio, name, inlet_rad, order_options, '')
 # defines radius by Strahler order in converging (venous mesh)
@@ -374,7 +373,7 @@ first_ven_no = ''  # number of elements read in plus one
 last_ven_no = ''  # 2x the original number of elements + number of connections
 
 define_rad_from_geom(order_system, s_ratio_ven, first_ven_no, inlet_rad_ven, order_options, last_ven_no)
-
+create_anastomosis(2,4,1)
 print('Venous mesh created using parameter and order system:', umbilical_elem_option, order_system)
 print('Viscosity:', rheology_type)
 print('Vessel type:', vessel_type)
@@ -404,7 +403,7 @@ if bc_type == 'flow':
 ####################################################################################
 
 evaluate_prq(mesh_type, bc_type, rheology_type, vessel_type, inlet_flow, inlet_pressure, outlet_pressure)
-
+calculate_stats(output_flow_dir + 'flowout', 1, 1)
 print('Pressure and flow simulation complete: ৻(  •̀ ᗜ •́  ৻)')
 
 ##export geometry

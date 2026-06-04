@@ -13,7 +13,7 @@ from fetoflow import *
 import csv
 import os
 
-sample_number = 'JT23078'
+sample_number = 'JT23070'
 img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
@@ -319,10 +319,12 @@ viscosity_type = 'constant'  # can also be 'pries_network' or 'pries_vessel' if 
 # Generate the di-graph & calculate the resistances based on the viscosity
 print("Creating Geometry")
 if adjusted_radi:
-    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii, anastomsis= True)
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii)
 else:
     G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only)
 
+print("Adding anastomosis")
+G = create_anastomosis(G,2,4,1)
 print("Calculating Resistance")
 G = calculate_resistance(G, viscosity_model=viscosity_type)
 print("Calculating Matrices")
@@ -331,7 +333,7 @@ print("Solving for Pressures and Flows")
 p, q = solve_small_system(A, b, G, bc_export)
 G = update_geometry_with_pressures_and_flows(G, p, q)
 inlet_measure, outlet_measure = get_tree_properties(G)
-export_region_as_csv(G, 'chorion',output_flow_dir+sample_number+'_ROI.csv', chorion_elems = chorion_elems[:,0], order_interest= None)
+#export_region_as_csv(G, 'chorion',output_flow_dir+sample_number+'_ROI.csv', chorion_elems = chorion_elems[:,0], order_interest= None)
 print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
 #export_all(G, 'placenta', output_flow_dir + 'FF_' + sample_number, 'all')
 #export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')

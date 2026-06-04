@@ -860,25 +860,27 @@ def create_umb_anastomosis(nodes, elems, umb_length, output_name, debug_file, in
 
 
     # create edit and append elements to match newly created nodes
-        elems[:, 0] += 5
+        elems[:, 0] += 4
         elems[:, 1] += 4
         elems[:, 2] += 4
         in1_anast = np.asarray([0,0,1])
         anast_root1 = np.asarray([1,1,elems[root_elems[0], 1]])
         in2_anast = np.asarray([2,2,3])
         anast_root2 = np.asarray([3,3,elems[root_elems[1], 1]])
-        anast = np.asarray([4,1,3])
+        #anast = np.asarray([4,1,3])
 
 
         in1_anast = in1_anast.reshape(1, 3)
         anast_root1 = anast_root1.reshape(1, 3)
         in2_anast = in2_anast.reshape(1, 3)
         anast_root2 = anast_root2.reshape(1, 3)
-        anast = anast.reshape(1, 3)
-        elems_new = np.vstack([in1_anast,anast_root1, in2_anast, anast_root2,anast, elems])
+        #anast = anast.reshape(1, 3)
+        #elems_new = np.vstack([in1_anast,anast_root1, in2_anast, anast_root2,anast, elems])
+        elems_new = np.vstack([in1_anast,anast_root1, in2_anast, anast_root2, elems])
         elems_new = elems_new.astype(int)
 
-        new_radii = np.array([radii_root1,radii_root1,radii_root2,radii_root2,radii_anast])
+        #new_radii = np.array([radii_root1,radii_root1,radii_root2,radii_root2,radii_anast])
+        new_radii = np.array([radii_root1,radii_root1,radii_root2,radii_root2])
         radii_new = np.concatenate((new_radii,radii))
 
     elif inlet_type == 'single':
