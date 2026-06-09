@@ -14,10 +14,10 @@ import csv
 import os
 
 sample_number = 'JT23070'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
-output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
-output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
+img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):
@@ -196,7 +196,7 @@ if inlet_type == 'single':
 elif inlet_type == 'double':
     trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,False)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_table_dir + sample_number, inlet_type,False)
 if inlet_type == 'single':
     radius_inlet_branch = get_inlet_branch_radius(Geom_A)
     Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
@@ -323,8 +323,8 @@ if adjusted_radi:
 else:
     G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only)
 
-print("Adding anastomosis")
-G = create_anastomosis(G,2,4,1)
+#print("Adding anastomosis")
+#G = create_anastomosis(G,2,4,1)
 print("Calculating Resistance")
 G = calculate_resistance(G, viscosity_model=viscosity_type)
 print("Calculating Matrices")
