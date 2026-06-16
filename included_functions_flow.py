@@ -331,7 +331,7 @@ def new_branch(mydegrees, branch_data, coordinates, pixel_graph, i, node_kount, 
                 # Create new element
                 elem_kount = elem_kount + 1
                 elems[elem_kount, 0] = elem_kount
-                elems[elem_kount, 1] = np_old[0]
+                elems[elem_kount, 1] = np_old[0][0]
                 elems[elem_kount, 2] = node_kount
                 iold = i
                 i = inew
