@@ -331,7 +331,7 @@ def new_branch(mydegrees, branch_data, coordinates, pixel_graph, i, node_kount, 
                 # Create new element
                 elem_kount = elem_kount + 1
                 elems[elem_kount, 0] = elem_kount
-                elems[elem_kount, 1] = np_old[0]
+                elems[elem_kount, 1] = np_old[0][0]
                 elems[elem_kount, 2] = node_kount
                 iold = i
                 i = inew
@@ -515,29 +515,37 @@ def tellme_figtitle(s):
     plt.draw()
 
 
-def skel2graph(sk, outputfilename, debug_file, inlet_type, original_image):
-    plt.clf()
-    plt.imshow(sk)
+def skel2graph(sk, outputfilename, debug_file, inlet_type, original_image, inletknown, inlets_in):
 
-    plt.setp(plt.gca(), autoscale_on=True)
-
-    tellme_figtitle('Click on, or near to the inlets')
-
-    plt.waitforbuttonpress()
-    if inlet_type == 'double':
-        pts = plt.ginput(n=2, show_clicks=True, mouse_add=1)
+    if inletknown ==  "N":
         plt.clf()
-    elif inlet_type == 'single':
-        pts = plt.ginput(n=1, show_clicks=True, mouse_add=1)
-    elif inlet_type == 'TTTS':
-        pts = plt.ginput(n=4, show_clicks=True, mouse_add=1)
-    else:
-        pts = plt.ginput(n=-1, show_clicks=True, mouse_add=1)
+        plt.imshow(sk)
+
+        plt.setp(plt.gca(), autoscale_on=True)
+
+        tellme_figtitle('Click on, or near to the inlets')
+
+        plt.waitforbuttonpress()
+        if inlet_type == 'double':
+            pts = plt.ginput(n=2, show_clicks=True, mouse_add=1)
+            plt.clf()
+        elif inlet_type == 'single':
+            pts = plt.ginput(n=1, show_clicks=True, mouse_add=1)
+        elif inlet_type == 'TTTS':
+            pts = plt.ginput(n=4, show_clicks=True, mouse_add=1)
+        else:
+            pts = plt.ginput(n=-1, show_clicks=True, mouse_add=1)
 
     # Im guessing these are coordinates of the umbilical artery insertion
-    inlets = np.asarray(pts)
+        inlets = np.asarray(pts)
+        print(f"INLET1X:",inlets[0][0])
+        print(f"INLET1Y:",inlets[0][1])
+        print(f"INLET2X:",inlets[1][0])
+        print(f"INLET2Y:",inlets[1][1])
+    else:
+        inlets = inlets_in
     print('Inlets: ', inlets, len(inlets))
-
+    plt.close()
     # converts skeleton to graphical structure
     pixel_graph, coordinates = csr.skeleton_to_csgraph(sk)
     xcord, ycord = coordinates
@@ -625,7 +633,7 @@ def skel2graph(sk, outputfilename, debug_file, inlet_type, original_image):
         pg.export_exelem_1d(elems[:, :][0:elem_kount + 1], 'arteries', outputfilename)
         pg.export_ex_coords(nodes[:, :][0:node_kount + 1], 'arteries', outputfilename, 'exnode')
 
-    return pixel_graph, coordinates, nodes[:, :][0:node_kount + 1], elems[:, :][0:elem_kount + 1]
+    return pixel_graph, coordinates, nodes[:, :][0:node_kount + 1], elems[:, :][0:elem_kount + 1], inlets
 
 
 def find_branch_points(nodes, elems):
