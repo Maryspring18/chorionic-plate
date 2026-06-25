@@ -24,10 +24,10 @@ parser.add_argument("--inlet2_x")
 parser.add_argument("--inlet2_y")
 args = parser.parse_args()
 sample_number = args.sample
-img_input_dir = 'X:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
-output_table_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
+img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/constant_radi/'
+output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/constant_radi/'
+output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/constant_radi/'
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):
@@ -46,7 +46,7 @@ inlet_type = 'double'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = True #Adjusting hte radius of the grown branches
+adjusted_radi = False #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
@@ -263,7 +263,7 @@ chorion_and_stem_shaped['elem_down'] = elem_cnct_shaped['elem_down']
 #------------------- Tree Generation---------------------------#
 #Grow tree with hull
 full_geom_shaped = pg.grow_large_tree(angle_max_ft, angle_min_ft, fraction_ft, min_length_ft, point_limit_ft, volume,
-                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1)
+                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1, parent_list_elems)
 
 Tree_file = output_tree_dir + 'full_tree_' + sample_number
 
