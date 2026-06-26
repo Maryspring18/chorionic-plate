@@ -146,6 +146,7 @@ if constant_vasc_density:
 else:
     n_seed_adjusted = n_seed
 ellipse_hull, xcentre, ycentre,zcentre, volume = equispaced_data_in_hull(n_seed_adjusted,plac_nodes)
+print(f"Final total volume = {volume}")
 print('Adjusted seed points based on volume')
 
 
@@ -263,7 +264,7 @@ chorion_and_stem_shaped['elem_down'] = elem_cnct_shaped['elem_down']
 #------------------- Tree Generation---------------------------#
 #Grow tree with hull
 full_geom_shaped = pg.grow_large_tree(angle_max_ft, angle_min_ft, fraction_ft, min_length_ft, point_limit_ft, volume,
-                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1)
+                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1, parent_list_elems)
 
 Tree_file = output_tree_dir + 'full_tree_' + sample_number
 

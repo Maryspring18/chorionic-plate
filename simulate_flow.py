@@ -5,7 +5,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sample")
 args = parser.parse_args()
 sample_number = args.sample
-
+use_real_radii = True
 output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
 output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
 
@@ -26,7 +26,11 @@ viscosity_type = 'constant'  # can also be 'pries_network' or 'pries_vessel' if 
 
 # Generate the di-graph & calculate the resistances based on the viscosity
 print("Creating Geometry")
-G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii)
+if use_real_radii:
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii)
+else:
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,
+                        arteries_only=arteries_only)
 print("Adding anastomosis")
 G = create_anastomosis(G,2,4,1)
 print("Calculating Resistance")
