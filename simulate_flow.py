@@ -5,9 +5,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sample")
 args = parser.parse_args()
 sample_number = args.sample
+
 use_real_radii = True
-output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+
 
 nodes = read_nodes(output_tree_dir + 'full_tree_' +sample_number+ '.ipnode')
 elems = read_elements(output_tree_dir + 'full_tree_' + sample_number+ '.ipelem')

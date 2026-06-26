@@ -13,7 +13,7 @@ from fetoflow import *
 import csv
 import os
 
-sample_number = 'JT23070'
+sample_number = 'JT25004'
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
 output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
@@ -42,7 +42,7 @@ adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-weight = 500 #g but is a proxy for cm3 since density of water is 1 g/cm3
+weight = 294 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180

@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 
-root = "X:/"
+root = "W:/"
 
 CSV_PATH = Path(root + "intermediate/2023-sex-specific/chorionic-segmentations/sample_list.csv")
 RESULTS_CSV_PATH = CSV_PATH.parent / "results.csv"
