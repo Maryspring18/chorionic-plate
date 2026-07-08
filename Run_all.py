@@ -23,6 +23,7 @@ RESULTS_COLUMNS = [
     "Inlet_node_1_pressure",
     "Total_vessel_volume_mm3",
     "Arterial_vessel_volume_mm3",
+    "Chorion_volume"
 ]
 
 
@@ -47,6 +48,9 @@ def parse_output_lines(output_lines: list[str]) -> dict:
         m = re.match(r"Area in mm2: \s*([\d.]+)", line)
         if m:
             metrics["Area_mm2"] = float(m.group(1))
+        m = re.match(r"Total chorionic vessel volume: \s*([\d.]+)", line)
+        if m:
+            metrics["Chorion_volume"] = float(m.group(1))
 
         # X length is 93.91 and y length is 93.21, Calculated Thickness is 28.28
         m = re.match(

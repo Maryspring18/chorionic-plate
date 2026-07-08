@@ -25,9 +25,9 @@ parser.add_argument("--inlet2_y")
 args = parser.parse_args()
 sample_number = args.sample
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/constant_radi/'
-output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/constant_radi/'
-output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/constant_radi/'
+output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):
@@ -46,7 +46,7 @@ inlet_type = 'double'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = False #Adjusting hte radius of the grown branches
+adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
@@ -241,6 +241,8 @@ branch_structure, branch_data = allocate_branch_numbers(nodes_Umb, elems_Umb)
 pg.export_exfield_1d_linear(branch_structure, 'arteries', 'branch', output_tree_dir + 'branch')
 real_radii = adjust_terminal_branch_radii(nodes_Umb,elems_Umb,real_radii,terminal)
 chorion_nodes, chorion_elems, chorion_radii = add_stem_villi(nodes_Umb, elems_Umb, sv_length, terminal, real_radii)
+chorion_vessel_volume, C_vessel, C_lengths = get_vessel_volume(chorion_nodes,chorion_radii, chorion_elems)
+print(f"Total chorionic vessel volume: {chorion_vessel_volume}")
 pg.export_exelem_1d(chorion_elems, 'arteries', output_tree_dir + 'chorion')
 pg.export_ex_coords(chorion_nodes, 'arteries', output_tree_dir + 'chorion', 'exnode')
 pg.export_exfield_1d_linear(chorion_radii, 'placenta', 'radii', output_tree_dir + 'chorion_radii')
