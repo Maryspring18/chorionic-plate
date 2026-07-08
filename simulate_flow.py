@@ -10,8 +10,8 @@ args = parser.parse_args()
 sample_number = args.sample
 
 use_real_radii = True
-output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/passive_pries_noanast/' + sample_number + '/outputs_flow_tree/'
+output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_flow_tree/'
 if not os.path.exists(output_flow_dir):
     os.makedirs(output_flow_dir)
 
