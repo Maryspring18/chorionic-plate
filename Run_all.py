@@ -5,10 +5,10 @@ import re
 from pathlib import Path
 
 
-root = "X:/"
+root = "W:/"
 
 CSV_PATH = Path(root + "intermediate/2023-sex-specific/chorionic-segmentations/sample_list.csv")
-RESULTS_CSV_PATH = CSV_PATH.parent / "results_1.csv"
+RESULTS_CSV_PATH = CSV_PATH.parent / "results.csv"
 GROW_TREE_SCRIPT = "Generate_tree.py"
 SIMULATE_FLOW_SCRIPT = "simulate_flow.py"
 
@@ -23,7 +23,7 @@ RESULTS_COLUMNS = [
     "Inlet_node_1_pressure",
     "Total_vessel_volume_mm3",
     "Arterial_vessel_volume_mm3",
-    "Chorionic_Volume"
+    "Chorion_volume"
 ]
 
 
@@ -46,12 +46,11 @@ def parse_output_lines(output_lines: list[str]) -> dict:
         line = line.strip()
         # Area in mm2: 22983.08
         m = re.match(r"Area in mm2: \s*([\d.]+)", line)
-
         if m:
             metrics["Area_mm2"] = float(m.group(1))
-        m = re.match(r"Total chorionic volume: \s*([\d.]+)", line)
+        m = re.match(r"Total chorionic vessel volume: \s*([\d.]+)", line)
         if m:
-            metrics["Chorionic_Volume"] = float(m.group(1))
+            metrics["Chorion_volume"] = float(m.group(1))
 
         # X length is 93.91 and y length is 93.21, Calculated Thickness is 28.28
         m = re.match(
@@ -186,10 +185,7 @@ def main():
             if returncode != 0:
                 print(f"  [ERROR] simulate_flow.py failed for {sample_id}.")
                 continue
-            if tree_grown == 'N':
-                output_lines.extend(output_lines_FF)
-            elif tree_grown == 'Y':
-                output_lines = output_lines_FF
+            output_lines.extend(output_lines_FF)
             metrics = parse_output_lines(output_lines)
             save_results(sample_id, metrics)
 

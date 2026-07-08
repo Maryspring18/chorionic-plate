@@ -20,7 +20,7 @@ from reprosim.pressure_resistance_flow import evaluate_prq, calculate_stats
 import csv
 import os
 
-sample_number = 'JT23067'
+sample_number = 'JT25003'
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
@@ -49,7 +49,7 @@ adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-weight = 518.4 #g but is a proxy for cm3 since density of water is 1 g/cm3
+weight = 499 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
