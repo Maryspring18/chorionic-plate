@@ -22,6 +22,7 @@ parser.add_argument("--inlet1_x")
 parser.add_argument("--inlet1_y")
 parser.add_argument("--inlet2_x")
 parser.add_argument("--inlet2_y")
+parser.add_argument("--Scaling_factor")
 args = parser.parse_args()
 sample_number = args.sample
 img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
@@ -145,6 +146,7 @@ if constant_vasc_density:
     print(f"Reference volume is {Reference_volume}, adjusted seed points to {n_seed_adjusted}.")
 else:
     n_seed_adjusted = n_seed
+n_seed_adjusted = n_seed_adjusted/(1 + float(args.Scaling_factor))
 ellipse_hull, xcentre, ycentre,zcentre, volume = equispaced_data_in_hull(n_seed_adjusted,plac_nodes)
 print(f"Final total volume = {volume}")
 print('Adjusted seed points based on volume')

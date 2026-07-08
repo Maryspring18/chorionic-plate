@@ -137,6 +137,7 @@ def main():
         inlet1y     = str(row.get("Inlet1y", "")).strip()
         inlet2x     = str(row.get("Inlet2x", "")).strip()
         inlet2y     = str(row.get("Inlet2y", "")).strip()
+        Scal_factor = row["Scaling_factor"].strip()
 
         if tree_grown != "Y":
             print(f"  Growing tree for {sample_id}...")
@@ -146,10 +147,11 @@ def main():
                  "--sample", sample_id,
                  "--weight", weight,
                  "--inletknown", inlet_known,
+                 "--Scaling_factor", Scal_factor,
                  "--inlet1_x", inlet1x,
                  "--inlet1_y", inlet1y,
                  "--inlet2_x", inlet2x,
-                 "--inlet2_y", inlet2y],
+                 "--inlet2_y", inlet2y,],
             )
 
             if returncode != 0:
