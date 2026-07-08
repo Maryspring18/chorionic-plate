@@ -14,10 +14,10 @@ import csv
 import os
 
 sample_number = 'JT25004'
-img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
-output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
+img_input_dir = 'X:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+output_table_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):

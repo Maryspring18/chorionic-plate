@@ -3,7 +3,7 @@ import csv
 import os
 
 
-sample_number = 'JT23067'
+sample_number = 'JT23070'
 img_input_dir = 'X:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
 output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
@@ -49,5 +49,5 @@ inlet_measure, outlet_measure = get_tree_properties(G)
 print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
 export_all(G, 'placenta', output_flow_dir  + sample_number, 'all')
 #export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
-visualise_tree(G, True, 'all')
+visualise_tree(G, True, 'arteries')
 print('End of Code')

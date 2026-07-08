@@ -24,10 +24,10 @@ parser.add_argument("--inlet2_x")
 parser.add_argument("--inlet2_y")
 args = parser.parse_args()
 sample_number = args.sample
-img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/constant_radi/'
-output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/constant_radi/'
-output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/constant_radi/'
+img_input_dir = 'X:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/constant_radi/'
+output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/constant_radi/'
+output_table_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/constant_radi/'
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):
@@ -209,7 +209,7 @@ if inlet_type == 'single':
 elif inlet_type == 'double':
     trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_table_dir + sample_number, inlet_type,False)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_table_dir + sample_number, inlet_type,True)
 if inlet_type == 'single':
     radius_inlet_branch = get_inlet_branch_radius(Geom_A)
     Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
@@ -241,6 +241,8 @@ branch_structure, branch_data = allocate_branch_numbers(nodes_Umb, elems_Umb)
 pg.export_exfield_1d_linear(branch_structure, 'arteries', 'branch', output_tree_dir + 'branch')
 real_radii = adjust_terminal_branch_radii(nodes_Umb,elems_Umb,real_radii,terminal)
 chorion_nodes, chorion_elems, chorion_radii = add_stem_villi(nodes_Umb, elems_Umb, sv_length, terminal, real_radii)
+chorion_volume, vessel_vols, vessel_lengths = get_vessel_volume(chorion_nodes,chorion_radii,chorion_elems)
+print(f"Total chorionic volume: {chorion_volume}")
 pg.export_exelem_1d(chorion_elems, 'arteries', output_tree_dir + 'chorion')
 pg.export_ex_coords(chorion_nodes, 'arteries', output_tree_dir + 'chorion', 'exnode')
 pg.export_exfield_1d_linear(chorion_radii, 'placenta', 'radii', output_tree_dir + 'chorion_radii')
@@ -264,7 +266,7 @@ chorion_and_stem_shaped['elem_down'] = elem_cnct_shaped['elem_down']
 #------------------- Tree Generation---------------------------#
 #Grow tree with hull
 full_geom_shaped = pg.grow_large_tree(angle_max_ft, angle_min_ft, fraction_ft, min_length_ft, point_limit_ft, volume,
-                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1, parent_list_elems)
+                                      thickness, 0, ellipse_hull, chorion_and_stem_shaped, 1)
 
 Tree_file = output_tree_dir + 'full_tree_' + sample_number
 

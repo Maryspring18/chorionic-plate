@@ -1086,27 +1086,27 @@ def chorion_branching_analytics(trees,sample_number,export_directory, inlet_type
         # csv files
         if export_data:
             print('Writing files')
-            output = export_directory+sample_number+'_A_'+ 'StrahlerTable.csv'
+            output = export_directory+'_A_'+ 'StrahlerTable.csv'
             headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
             np.savetxt(output, strahler_table_A, fmt='%.4f', delimiter=',', header=headerTable)
 
-            output = export_directory+sample_number+'_A_'+ 'GenerationTable.csv'
+            output = export_directory+'_A_'+ 'GenerationTable.csv'
             headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
             np.savetxt(output, generation_table_A, fmt='%.4f', delimiter=',', header=headerTable)
 
-            output = export_directory +sample_number+'_A_'+ 'OverallTable.csv'
+            output = export_directory +'_A_'+ 'OverallTable.csv'
             headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
             np.savetxt(output, branch_table_A, fmt='%.4f', delimiter=',', header=headerTable)
 
-            output = export_directory +sample_number+'_B_'+ 'StrahlerTable.csv'
+            output = export_directory +'_B_'+ 'StrahlerTable.csv'
             headerTable = "'Order', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'EuclideanLength(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'LenRatio', 'std', 'DiamRatio', 'std'"
             np.savetxt(output, strahler_table_B, fmt='%.4f', delimiter=',', header=headerTable)
 
-            output = export_directory +sample_number+'_B_'+ 'GenerationTable.csv'
+            output = export_directory +'_B_'+ 'GenerationTable.csv'
             headerTable = "'Gen', 'NumBranches', 'Length(mm)', 'std', 'Diameter(mm)', 'std', 'Euclidean Length(mm)', 'std', 'Len/Diam', 'std', 'Tortuosity', 'std', 'Angles', 'std', 'Minor Angle', 'std', 'Major Angle', 'std', 'LLparent', 'std', 'LminLparent', 'std', 'LmajLparent', 'std', 'LminLmaj', 'std', 'DDparent', 'std', 'DminDparent', 'std', 'DmajDparent', 'std', 'DminDmaj', 'std'"
             np.savetxt(output, generation_table_B, fmt='%.4f', delimiter=',', header=headerTable)
 
-            output = export_directory +sample_number+'_B_'+ 'OverallTable.csv'
+            output = export_directory +'_B_'+ 'OverallTable.csv'
             headerTable = "'Num branches', 'Total length','Total vessel volume', 'Total volume', 'vascular span','inlet diameter','num generations', 'num orders', 'ave term gen','std','tortuosity','std','branch length', 'std', 'euc length', 'std', 'diameter','std','L/D','std', 'branch angle', 'std','minor angle','std', 'major angle', 'std', 'D/Dparent', 'std', 'Dmin/Dparent','std', 'Dmaj/Dparent', 'std', 'L/Lparent', 'std','L/Lparent','std', 'Lmin/Lparent','std','Lmaj/Lparent', 'std', 'Lmaj/Lmin','std', 'Rb', 'rsq','Rd','rsq','Rl','rsq'"
             np.savetxt(output, branch_table_B, fmt='%.4f', delimiter=',', header=headerTable)
     elif inlet_type == 'single':
