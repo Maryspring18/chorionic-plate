@@ -21,7 +21,7 @@ import csv
 import os
 
 sample_number = 'JT23067'
-img_input_dir = '/media/share/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
 output_tree_dir = 'outputs_grow_tree/' + sample_number + '/'
 output_flow_dir = 'outputs_flow_tree/' + sample_number + '/'
 output_table_dir = 'outputs_branch_stats/' + sample_number + '/'
@@ -43,13 +43,13 @@ inlet_type = 'double'
 inlet_node = True
 is_rotated = False
 constant_vasc_density = True
-adjusted_radi = False #Adjusting hte radius of the grown branches
+adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
 #Number of seed points targeted for growing tree
 n_seed = 32000
-weight = 518.4#g but is a proxy for cm3 since density of water is 1 g/cm3
+weight = 518.4 #g but is a proxy for cm3 since density of water is 1 g/cm3
 Reference_volume = 292062
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
@@ -201,7 +201,7 @@ if inlet_type == 'single':
 elif inlet_type == 'double':
     trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,True)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_tree_dir, inlet_type,False)
 if inlet_type == 'single':
     radius_inlet_branch = get_inlet_branch_radius(Geom_A)
     Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
@@ -317,8 +317,7 @@ print('Beginning flow and pressure simulations (ó﹏ò｡)')
 # --------------- Flow simulation setup --------------------- #
 ###############################################################
 
-set_diagnostics_level(
-    0)  # level 0 - no diagnostics; level 1 - only prints subroutine names (default); level 2 - prints subroutine names and contents of variables
+set_diagnostics_level(0)  # level 0 - no diagnostics; level 1 - only prints subroutine names (default); level 2 - prints subroutine names and contents of variables
 perfusion_indices()
 #Load node points in tree
 print("Reading elem file", Tree_file)
