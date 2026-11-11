@@ -12,12 +12,21 @@ from skan import draw, Skeleton, summarize
 from fetoflow import *
 import csv
 import os
+import pandas as pd
+root = '/home/cjay511/Documents/Outputs'
 
-sample_number = 'JT23070'
-img_input_dir = 'W:/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
-output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
-output_table_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
+#sample_number = 'P51'
+#img_input_dir = root+ '/derivative/2023-sex-specific/chorionic-segmentations/' +sample_number +'/'
+#output_tree_dir = root+ '/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_grow_tree/'
+#output_flow_dir = root+ '/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_flow_tree/'
+#output_table_dir = root+ '/intermediate/2023-sex-specific/chorionic-segmentations/' + sample_number + '/outputs_branch/'
+
+sample_number = 'P49'
+img_input_dir = root+ '/input/' +sample_number +'/'
+output_tree_dir = root+ '/outputs/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = root+ '/outputs/' + sample_number + '/outputs_flow_tree/base/base/'
+output_table_dir = root+ '/outputs/' + sample_number + '/outputs_branch/'
+
 if not os.path.exists(output_tree_dir):
     os.makedirs(output_tree_dir)
 if not os.path.exists(output_flow_dir):
@@ -35,15 +44,15 @@ show_debug_images = False
 inlet_type = 'double'
 inlet_node = True
 is_rotated = False
-constant_vasc_density = True
+constant_vasc_density = False
 adjusted_radi = True #Adjusting hte radius of the grown branches
 ###############################################################
 # Parameters that define branching within the placenta volume #
 ###############################################################/
 #Number of seed points targeted for growing tree
-n_seed = 32000
-weight = 500 #g but is a proxy for cm3 since density of water is 1 g/cm3
-Reference_volume = 292062
+n_seed = 43000#37500#43000
+weight = 401.7 #g but is a proxy for cm3 since density of water is 1 g/cm3
+Reference_volume = 250000
 #Maximum angle between two branches
 angle_max_ft = 100 * np.pi / 180
 #Minimum angle between two branches
@@ -55,7 +64,7 @@ min_length_ft = 1.0  #mm
 #minimum number of data points that can be in any group after a data splitting proceedure
 point_limit_ft = 1
 #pixel density
-pixel_scale = 0.04 #mm/pixel
+pixel_scale = 0.052 #mm/pixel
 #placenta measurements
 thickness = 20 #mm
 t_pixels = int(thickness / pixel_scale)
@@ -63,7 +72,7 @@ t_half = int(t_pixels * 2)
 #SV and umbilical cord
 sv_length = 2.0  #mm
 umbilical_length = 10.0  #mm
-rotation_angle = 120
+rotation_angle = 0
 scale_factor_x = 1.2
 scale_factor_y = 1.2
 #######################################################################
@@ -72,14 +81,14 @@ scale_factor_y = 1.2
 if use_custom_pixel_scale:
     print('Using Custom Pixel Scale')
     scale_filename = img_input_dir + sample_number + '_scale.png'
-    scale_file = read_png(scale_filename, 'g')
+    scale_file = read_png(scale_filename, 'r')
     pixel_scale = get_scale(10, scale_file)
 print('Scale: ' + str(pixel_scale) + ' mm/pixel')
 #read placenta outline
 placenta_area_filename = sample_number + '_area.png'
-green_pixels, placenta_area = calculate_area(img_input_dir+placenta_area_filename,pixel_scale, show_debug_images)
-print(f"Number of Green Pixels: {green_pixels}")
-print(f"Area in mm²: {placenta_area:.2f}")
+#green_pixels, placenta_area = calculate_area(img_input_dir+placenta_area_filename,pixel_scale, show_debug_images)
+#print(f"Number of Green Pixels: {green_pixels}")
+#print(f"Area in mm²: {placenta_area:.2f}")
 #######################################################################
 #-------------------Ellipse/Hull Generation---------------------------#
 #######################################################################
@@ -94,7 +103,8 @@ x_mm = ellipse_fit[1] * pixel_scale  #x length of the placenta in mm
 y_mm = ellipse_fit[0] * pixel_scale  #y length of the placenta in mm
 vol_mm3 = weight * 1000
 #volume = 4. * np.pi * x_mm * y_mm * (thickness / 2.) / 3.
-thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+#thickness = (vol_mm3*6)/(np.pi*y_mm*x_mm*4) #thickness assuming ellipsoid
+thickness = 16.2 #26.9#16.2
 print(f"X length is {x_mm} and y length is {y_mm}, Calculated Thickness is {thickness}")
 #Generate the outline of the placenta in 3D
 outputfilename = output_flow_dir + sample_number + '_plac_3d'
@@ -196,7 +206,7 @@ if inlet_type == 'single':
 elif inlet_type == 'double':
     trees = split_trees(arterial_shaped_nodes,art_elems,real_radii)
 #arterial_shaped_nodes, art_elems = pg.delete_unused_nodes(arterial_shaped_nodes, art_elems)
-Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_table_dir + sample_number, inlet_type,False)
+Geom_A, Geom_B = chorion_branching_analytics(trees,sample_number,output_table_dir, inlet_type,True)
 if inlet_type == 'single':
     radius_inlet_branch = get_inlet_branch_radius(Geom_A)
     Geom_A = set_inlet_branch_radius(Geom_A,radius_inlet_branch)
@@ -278,15 +288,16 @@ if is_rotated:
 pg.export_ex_coords(full_geom_shaped['nodes'], 'placenta', Tree_file, 'exnode')
 pg.export_exelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 radii_hull_elem = pg.define_radius_by_order(full_geom_shaped['nodes'][:, 1:4], full_geom_shaped['elems'], 'strahler',
-                                            0, 1.8, 1.53)
+                                            0, 1.3, 1.497) #P51 1.8/1.635 1.3/1.497
 outputfilename = output_tree_dir + 'radii_' + sample_number
 pg.export_exfield_1d_linear(radii_hull_elem, 'placenta', 'radii', outputfilename)
+order_full = pg.evaluate_orders(full_geom_shaped['nodes'][:, 1:4], full_geom_shaped['elems'])
 #ConvertExtoIP(Tree_file)
 pg.export_ip_coords(full_geom_shaped['nodes'][:, 1:4], 'placenta', Tree_file)
 pg.export_ipelem_1d(full_geom_shaped['elems'], 'placenta', Tree_file)
 print('Tree generation complete: ৻(  •̀ ᗜ •́  ৻)')
-radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,chorion_radii,0.06)
-pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'part_radii_' + sample_number)
+radii_downstream = set_radii_per_parent(full_geom_shaped,parent_list_nodes,parent_list_elems,chorion_radii,0.0519) #0.0352 0.0519(P49)
+pg.export_exfield_1d_linear(radii_downstream, 'placenta', 'radii', output_tree_dir + 'radii_adjusted_' + sample_number)
 pg.export_ex_coords(parent_list_nodes, 'placenta', output_tree_dir + 'parent_nodes_' + sample_number, 'exnode')
 pg.export_ipfiel(radii_downstream,output_tree_dir + 'tree_radii_' + sample_number)
 volume, vessel_volumes, lengths = get_vessel_volume(full_geom_shaped['nodes'],radii_downstream,full_geom_shaped['elems'])
@@ -307,11 +318,11 @@ pg.calc_terminal_branch(full_geom_shaped['nodes'][:,1:4],full_geom_shaped['elems
 
 nodes = set_nodes_from_array(full_geom_shaped['nodes'])
 elems = set_edges_from_array(full_geom_shaped['elems'])
-radii = set_fields_from_array(radii_downstream,'radius')
+
 outlet_pressure, inlet_flow, inlet_pressure = 2660, 2083.35, 6650
 bcs = generate_boundary_conditions(outlet_pressure=outlet_pressure, inlet_flow=inlet_flow)
 # define other required geometric features (radii and decay factors)
-umbilical_artery_radius, decay_factor = 1.8, 1.38  # 1.51795
+umbilical_artery_radius, decay_factor = 1.8, 1.36  # 1.51795
 umbilical_vein_radius, decay_factor_vein = 4.0, 1.46
 arteries_only = False  # this should rarely be true
 viscosity_type = 'constant'  # can also be 'pries_network' or 'pries_vessel' if wanting to incorporate radius-dependence
@@ -319,23 +330,55 @@ viscosity_type = 'constant'  # can also be 'pries_network' or 'pries_vessel' if 
 # Generate the di-graph & calculate the resistances based on the viscosity
 print("Creating Geometry")
 if adjusted_radi:
+    radii = set_fields_from_array(radii_downstream, 'radius')
+
     G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only, fields=radii)
 else:
-    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only)
+    radii = set_fields_from_array(radii_hull_elem, 'radius')
 
-#print("Adding anastomosis")
-#G = create_anastomosis(G,2,4,1)
+    G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,arteries_only=arteries_only,fields=radii)
+
+print("Adding anastomosis")
+G = create_anastomosis(G,2,4,1)
+print("Adding occlusion")
+#G = update_edge_property(G,30535,'radius',0.01)
 print("Calculating Resistance")
 G = calculate_resistance(G, viscosity_model=viscosity_type)
+H = G.copy()
+
 print("Calculating Matrices")
 A, b, bc_export = create_small_matrices(G, bcs, branching_angles=False)
 print("Solving for Pressures and Flows")
 p, q = solve_small_system(A, b, G, bc_export)
 G = update_geometry_with_pressures_and_flows(G, p, q)
 inlet_measure, outlet_measure = get_tree_properties(G)
+R = vessel_tree_resistances(G)
+print(R)
 #export_region_as_csv(G, 'chorion',output_flow_dir+sample_number+'_ROI.csv', chorion_elems = chorion_elems[:,0], order_interest= None)
 print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
-#export_all(G, 'placenta', output_flow_dir + 'FF_' + sample_number, 'all')
 #export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
-visualise_tree(G, True, 'all')
+A, df = extract_terminal_vessel_data(G)
+print(f"Number of terminal vessels is {df.shape[0]}")
+count = 0
+for data in df['flow']:
+    if data < 0.001:
+        count += 1
+print(f"There are {count} vessel with less than 0.001 mm3/s flow")
+
+if adjusted_radi:
+    export_all(G, 'placenta', output_flow_dir + 'FF_radii_' + sample_number, 'arteries')
+    df.to_csv(output_flow_dir+'terminals_radii_' +sample_number+ '.csv',index=False)
+else:
+    export_all(G, 'placenta', output_flow_dir + 'FF_noradii_' + sample_number, 'arteries')
+    df.to_csv(output_flow_dir + 'terminals_noradii_' +sample_number+ '.csv', index=False)
+
+print("Calculating whole tree resistance using boundary conditions")
+bcs2 = generate_boundary_conditions(inlet_pressure=inlet_pressure, outlet_pressure=outlet_pressure)
+C,d,bc_export2 = create_small_matrices(H,bcs2,branching_angles=False)
+p2,q2 = solve_small_system(C,d,H,bc_export2)
+H = update_geometry_with_pressures_and_flows(H,p2,q2)
+inlet_measure2, outlet_measure2 = get_tree_properties(H)
+tree_resistance = (inlet_pressure-outlet_pressure)/next(iter(outlet_measure2.values()))['flow']
+print(f"Whole tree resistance is {tree_resistance}")
+visualise_tree(G, True, 'arteries')
 print('End of Code')

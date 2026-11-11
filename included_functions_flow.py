@@ -1280,8 +1280,9 @@ def set_radii_per_parent(tree, parent_list_nodes, parent_list_elems, radii,termi
     elems = tree['elems']
     orders = pg.evaluate_orders(nodes[:,1:4],elems)
     strahler_order = orders['strahler']
-    EC = pg.element_connectivity_1D(nodes[:,1:4],elems)
+    EC = element_connectivity_multi(nodes[:,1:4],elems)
     elem_down = EC['elem_down']
+    elem_up = EC['elem_up']
     print(f"Adjusting radii from {len(parent_list_elems)} parents")
     # --- Usage ---
     radii_downstream = np.zeros(len(elems))
@@ -1294,10 +1295,27 @@ def set_radii_per_parent(tree, parent_list_nodes, parent_list_elems, radii,termi
         strahler_ratio = (parent_radius/terminal_villi_radius)**(1/(parent_strahler-1))
 
         downstream = get_all_downstream_elements(parent_elem, elem_downstream)
-        print(f"Adjusting radius for parent elem {parent_elem} with {len(downstream)} children elements")
-        print(f"Parent strahler is {parent_strahler}, Stahler ratio for child vessels is {strahler_ratio}")
-        for elem_num in downstream:
-            radii_downstream[elem_num] = parent_radius/(strahler_ratio **(parent_strahler-strahler_order[elem_num]))
+        if len(downstream) == 0 or parent_strahler == 1:
+
+            radii_downstream[parent_elem] = terminal_villi_radius
+            branch_point = False
+            current_elem = parent_elem
+            print(f"Current parent elem is {parent_elem}")
+            while not branch_point:
+                elem_upstream = elem_up[current_elem][1]
+                if elem_down[elem_upstream][0] == 2: #branch
+                    radii_downstream[current_elem] = terminal_villi_radius
+                    branch_point = True
+                else:
+                    radii_downstream[current_elem] = terminal_villi_radius
+                    current_elem = elem_upstream
+            print(f"Parent elem {parent_elem} is terminal and branch has been set to terminal radius")
+        else:
+            #print(f"Adjusting radius for parent elem {parent_elem} with {len(downstream)} children elements")
+            #print(f"Parent strahler is {parent_strahler}, Stahler ratio for child vessels is {strahler_ratio}")
+            for elem_num in downstream:
+
+                radii_downstream[elem_num] = parent_radius/(strahler_ratio **(parent_strahler-strahler_order[elem_num]))
 
     return radii_downstream
 
@@ -1358,3 +1376,184 @@ def reassign_radii(geom, parent_list_nodes, parent_list_elems, radii, terminal_r
     elem_down = geom['elem_down']
 
     return
+
+def arterial_tree_resistances(G,
+                              resistance_attr="resistance",
+                              type_attr="vessel_type",
+                              artery_label="artery",
+                              inlets=None):
+    """
+    Equivalent resistance of each arterial tree in a directed vessel network,
+    from its inlet to the terminal arteries.
+
+    Parameters
+    ----------
+    G : nx.DiGraph
+        Full network. Edges are directed in the flow direction and carry
+        `resistance_attr` and `type_attr` attributes.
+    resistance_attr, type_attr : str
+        Edge attribute names for resistance and vessel type.
+    artery_label : str
+        Value of `type_attr` identifying arteries (compared case-insensitively).
+    inlets : list, optional
+        Inlet nodes. If None, they are the arterial nodes with no incoming
+        arterial edge.
+
+    Returns
+    -------
+    dict {inlet_node: equivalent_resistance}
+    """
+    def is_artery(d):
+        return str(d.get(type_attr, "")).lower() == artery_label.lower()
+
+    def res(u, v, d):
+        if resistance_attr not in d:
+            raise KeyError(f"Edge ({u}, {v}) has no '{resistance_attr}' attribute.")
+        return float(d[resistance_attr])
+
+    # Arterial subgraph (a view; the original graph is not modified)
+    art_edges = [(u, v) for u, v, d in G.edges(data=True) if is_artery(d)]
+    if not art_edges:
+        raise ValueError("No artery edges found.")
+    A = G.edge_subgraph(art_edges)
+
+    if inlets is None:
+        inlets = [n for n in A.nodes if A.in_degree(n) == 0]
+    if not inlets:
+        raise ValueError("Could not detect any arterial inlet nodes "
+                         "(the arterial subgraph may contain a cycle).")
+
+    results = {}
+    claimed = set()
+
+    for inlet in inlets:
+        # Everything downstream of this inlet along artery edges
+        nodes = nx.descendants(A, inlet) | {inlet}
+        T = A.subgraph(nodes)
+
+        if not nx.is_arborescence(T):
+            raise ValueError(
+                f"Arterial structure from inlet {inlet} is not a tree "
+                "(loop or node with multiple arterial parents)."
+            )
+        if nodes & claimed:
+            raise ValueError(f"Tree from inlet {inlet} overlaps with another inlet's tree.")
+        claimed |= nodes
+
+        # Leaves first: reverse topological order
+        R_down = {}
+        for node in reversed(list(nx.topological_sort(T))):
+            kids = list(T.successors(node))
+            if not kids:
+                R_down[node] = 0.0  # terminal artery
+            else:
+                # Each child branch is in series (edge + downstream), branches in parallel
+                g = sum(1.0 / (res(node, k, T[node][k]) + R_down[k]) for k in kids)
+                R_down[node] = 1.0 / g
+
+        results[inlet] = R_down[inlet]
+
+    orphans = set(A.nodes) - claimed
+    if orphans:
+        raise ValueError(f"{len(orphans)} arterial nodes are not reachable from the inlets.")
+
+    return results
+
+def vessel_tree_resistances(G,
+                            resistance_attr="resistance",
+                            type_attr="vessel_type",
+                            artery_label="artery",
+                            vein_label="vein",
+                            inlets=None,
+                            outlets=None):
+    """
+    Equivalent resistance of the arterial and venous trees in a directed
+    vessel network.
+
+    Arterial trees are reduced from each inlet to the terminal arteries.
+    Venous trees are reduced from the terminal veins to each outlet
+    (the umbilical vein). Capillaries are not included.
+
+    Parameters
+    ----------
+    G : nx.DiGraph
+        Full network. Edges are directed in the flow direction and carry
+        `resistance_attr` and `type_attr` attributes.
+    resistance_attr, type_attr : str
+        Edge attribute names for resistance and vessel type.
+    artery_label, vein_label : str
+        Values of `type_attr` identifying arteries and veins
+        (compared case-insensitively).
+    inlets : list, optional
+        Arterial inlet nodes. If None, they are the arterial nodes with no
+        incoming arterial edge.
+    outlets : list, optional
+        Venous outlet nodes. If None, they are the venous nodes with no
+        outgoing venous edge.
+
+    Returns
+    -------
+    dict : {"arteries": {inlet_node: R}, "veins": {outlet_node: R}}
+    """
+    def res(u, v, d):
+        if resistance_attr not in d:
+            raise KeyError(f"Edge between {u} and {v} has no '{resistance_attr}' attribute.")
+        return float(d[resistance_attr])
+
+    def reduce_trees(label, roots, reverse):
+        label_l = label.lower()
+        name = "arterial" if not reverse else "venous"
+
+        edges = [(u, v) for u, v, d in G.edges(data=True)
+                 if str(d.get(type_attr, "")).lower() == label_l]
+        if not edges:
+            raise ValueError(f"No {label} edges found.")
+        S = G.edge_subgraph(edges)
+
+        # Orient so that every tree points away from its root
+        W = S.reverse(copy=False) if reverse else S
+
+        if roots is None:
+            roots = [n for n in W.nodes if W.in_degree(n) == 0]
+        if not roots:
+            raise ValueError(f"Could not detect any {name} root nodes "
+                             f"(the {name} subgraph may contain a cycle).")
+
+        results, claimed = {}, set()
+        for root in roots:
+            nodes = nx.descendants(W, root) | {root}
+            T = W.subgraph(nodes)
+
+            if not nx.is_arborescence(T):
+                raise ValueError(
+                    f"{name.capitalize()} structure at node {root} is not a tree "
+                    "(loop or node with multiple parents)."
+                )
+            if nodes & claimed:
+                raise ValueError(f"{name.capitalize()} tree at node {root} "
+                                 "overlaps with another tree.")
+            claimed |= nodes
+
+            # Leaves first: reverse topological order
+            R_down = {}
+            for node in reversed(list(nx.topological_sort(T))):
+                kids = list(T.successors(node))
+                if not kids:
+                    R_down[node] = 0.0  # terminal vessel
+                else:
+                    # Each branch is edge + downstream in series; branches in parallel
+                    g = sum(1.0 / (res(node, k, T[node][k]) + R_down[k]) for k in kids)
+                    R_down[node] = 1.0 / g
+
+            results[root] = R_down[root]
+
+        orphans = set(W.nodes) - claimed
+        if orphans:
+            raise ValueError(f"{len(orphans)} {name} nodes are not reachable "
+                             f"from the {'outlets' if reverse else 'inlets'}.")
+        return results
+
+    return {
+        "arteries": reduce_trees(artery_label, inlets, reverse=False),
+        "veins": reduce_trees(vein_label, outlets, reverse=True),
+    }
