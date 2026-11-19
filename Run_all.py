@@ -5,10 +5,10 @@ import re
 from pathlib import Path
 
 
-root = "W:/"
+root = "X:/"
 
 CSV_PATH = Path(root + "intermediate/2023-sex-specific/chorionic-segmentations/sample_list.csv")
-RESULTS_CSV_PATH = CSV_PATH.parent / "results_scaled.csv"
+RESULTS_CSV_PATH = CSV_PATH.parent / "results_test.csv"
 GROW_TREE_SCRIPT = "Generate_tree.py"
 SIMULATE_FLOW_SCRIPT = "simulate_flow.py"
 
@@ -23,7 +23,11 @@ RESULTS_COLUMNS = [
     "Inlet_node_1_pressure",
     "Total_vessel_volume_mm3",
     "Arterial_vessel_volume_mm3",
-    "Chorion_volume"
+    "Chorion_volume",
+    "Whole_tree_resistance",
+    "Mean_terminal_flow",
+    "SD_terminal_flow",
+    "CoV_terminal_flow"
 ]
 
 
@@ -80,7 +84,27 @@ def parse_output_lines(output_lines: list[str]) -> dict:
         if m:
             metrics["Total_vessel_volume_mm3"] = float(m.group(1))
             metrics["Arterial_vessel_volume_mm3"] = float(m.group(2))
+        # Whole tree resistance is 0.123
+        m = re.match(r"Whole tree resistance is\s*([\d.eE+-]+)", line)
+        if m:
+            metrics["Whole_tree_resistance"] = float(m.group(1))
 
+        # Mean flow and standard deviation of terminal vessels
+        m = re.match(
+            r"Mean flow at terminal vessels is ([\d.eE+-]+) and std deviation is ([\d.eE+-]+)",
+            line
+        )
+        if m:
+            metrics["Mean_terminal_flow"] = float(m.group(1))
+            metrics["SD_terminal_flow"] = float(m.group(2))
+
+        # Coefficient of variation of flow
+        m = re.match(
+            r"Coefficent of variation of flow is ([\d.eE+-]+)",
+            line
+        )
+        if m:
+            metrics["CoV_terminal_flow"] = float(m.group(1))
     if len(inlet_pressures) >= 1:
         metrics["Inlet_node_0_pressure"] = inlet_pressures[0]
     if len(inlet_pressures) >= 2:
@@ -107,10 +131,29 @@ def save_results(sample_id: str, metrics: dict):
 
 def run_fetoflow(cmd):
     captured_lines = []
+    inlet_pressure_count = 0
+    outlet_pressure_count = 0
+
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, encoding="utf-8") as proc:
         for line in proc.stdout:
             print(line, end="")
+
+            # Capture only the first two inlet pressure lines
+            if re.match(r"Inlet node,\s*\d+,\s*has pressure", line):
+                inlet_pressure_count += 1
+
+                if inlet_pressure_count > 2:
+                    continue
+
+            # Capture only the first outlet pressure line
+            if re.match(r"Outlet node,", line):
+                outlet_pressure_count += 1
+
+                if outlet_pressure_count > 1:
+                    continue
+
             captured_lines.append(line)
+
     return proc.returncode, captured_lines
 
 
@@ -127,6 +170,7 @@ def main():
     df = load_csv()
 
     for idx, row in df.iterrows():
+        output_lines = []
         sample_id = row["Code"]
         print(f"\n{'='*50}\nProcessing sample: {sample_id}")
         sample_id   = row["Code"].strip()

@@ -10,8 +10,8 @@ args = parser.parse_args()
 sample_number = args.sample
 
 use_real_radii = True
-output_tree_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_grow_tree/'
-output_flow_dir = 'W:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_flow_tree/'
+output_tree_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_grow_tree/'
+output_flow_dir = 'X:/intermediate/2023-sex-specific/chorionic-segmentations/scaled/' + sample_number + '/outputs_flow_tree/'
 if not os.path.exists(output_flow_dir):
     os.makedirs(output_flow_dir)
 
@@ -37,10 +37,13 @@ if use_real_radii:
 else:
     G = create_geometry(nodes, elems, umbilical_artery_radius, decay_factor, umbilical_vein_radius, decay_factor_vein,
                         arteries_only=arteries_only)
-#print("Adding anastomosis")
-#G = create_anastomosis(G,2,4,1)
+print("Adding anastomosis")
+G = create_anastomosis(G,2,4,1)
 print("Calculating Resistance")
 G = calculate_resistance(G, viscosity_model=viscosity_type)
+H = G.copy()
+
+
 if viscosity_type == 'constant' and vessel_elasticity == 'rigid':
     print("Calculating Matrices")
     A, b, bc_export = create_small_matrices(G, bcs, branching_angles=False)
@@ -54,8 +57,19 @@ else:
 
 G = update_geometry_with_pressures_and_flows(G, p, q)
 inlet_measure, outlet_measure = get_tree_properties(G)
+A, df = extract_terminal_vessel_data(G)
+
+
 print(f"Total vessel volume is {calc_vessel_volume(G,'all')}, arterial vessel volume is {calc_vessel_volume(G, 'artery')}")
-export_all(G, 'placenta', output_flow_dir  + sample_number, 'all')
-export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
+
+bcs2 = generate_boundary_conditions(inlet_pressure=inlet_pressure, outlet_pressure=outlet_pressure)
+C,d,bc_export2 = create_small_matrices(H,bcs2,branching_angles=False)
+p2,q2 = solve_small_system(C,d,H,bc_export2)
+H = update_geometry_with_pressures_and_flows(H,p2,q2)
+inlet_measure2, outlet_measure2 = get_tree_properties(H)
+tree_resistance = (inlet_pressure-outlet_pressure)/next(iter(outlet_measure2.values()))['flow']
+print(f"Whole tree resistance is {tree_resistance}")
+#export_all(G, 'placenta', output_flow_dir  + sample_number, 'all')
+#export_field(G, 'placenta', 'strahler', output_flow_dir + 'FF_' + sample_number, 'all')
 #visualise_tree(G, True, 'all')
 print('End of Code')
